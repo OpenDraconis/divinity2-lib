@@ -1,0 +1,21 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "divinity2-lib"
+dynamic = ["version"]
+description = "Read Divinity II: Developer's Cut's archives and binary XML, named"
+readme = "README.md"
+requires-python = ">=3.11"
+license = "MIT"
+dependencies = []
+
+[project.urls]
+Homepage = "https://github.com/ygalsk/divinity2-lib"
+
+[tool.setuptools]
+packages = ["dv2lib"]
+
+[tool.setuptools.dynamic]
+version = { attr = "dv2lib.__version__" }
