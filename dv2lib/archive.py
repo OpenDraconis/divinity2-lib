@@ -74,7 +74,13 @@ class Archive:
         return self
 
     def __exit__(self, *exc: object) -> None:
+        self.close()
+
+    def close(self) -> None:
         self._fh.close()
+
+    def __len__(self) -> int:
+        return len(self.entries)
 
     def __iter__(self) -> Iterator[Entry]:
         return iter(self.entries)
@@ -159,3 +165,48 @@ def safe_destination(outdir: Path, posix_path: str) -> Path:
     if not dest.is_relative_to(outdir.resolve()):
         raise ArchiveError(f"{posix_path}: path escapes the output directory")
     return dest
+
+
+ALIGNMENT = 32768   # uncompressed entries sit on this boundary; believed texture streaming
+
+
+def check_invariants(archive: Archive) -> list[str]:
+    """Return a list of violated structural expectations."""
+    problems: list[str] = []
+    h = archive.header
+
+    if h.unknown_a != 1:
+        problems.append(f"unknown_a={h.unknown_a}, expected 1 (spec §1.4)")
+    if h.unknown_b != 4:
+        problems.append(f"unknown_b={h.unknown_b}, expected 4 (spec §1.4)")
+    if h.unknown_d != 1:
+        problems.append(f"unknown_d={h.unknown_d}, expected 1 (spec §1.4)")
+
+    # The headline finding: align_32k predicts data_start alignment exactly.
+    aligned = h.data_start % ALIGNMENT == 0
+    if h.align_32k == 0 and not aligned:
+        problems.append(f"align_32k=0 but data_start={h.data_start} is not 32K-aligned")
+    elif h.align_32k == 1 and aligned:
+        problems.append(
+            f"align_32k=1 but data_start={h.data_start} IS 32K-aligned "
+            "(never observed in the shipped corpus)"
+        )
+    if h.align_32k not in (0, 1):
+        problems.append(f"align_32k={h.align_32k}, expected 0 or 1")
+
+    for e in archive:
+        if e.is_compressed:
+            continue
+        aligned = (h.data_start + e.offset) % ALIGNMENT == 0
+        if h.align_32k == 0 and not aligned:
+            problems.append(
+                f"{e.path}: align_32k=0 but raw entry is not 32K-aligned "
+                f"(abs offset {h.data_start + e.offset})"
+            )
+        elif h.align_32k == 1 and aligned:
+            problems.append(
+                f"{e.path}: align_32k=1 but raw entry IS 32K-aligned "
+                f"(abs offset {h.data_start + e.offset})"
+            )
+
+    return problems

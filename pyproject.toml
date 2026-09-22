@@ -1,5 +1,5 @@
 [build-system]
-requires = ["setuptools>=68"]
+requires = ["setuptools>=77"]   # the PEP 639 `license` string
 build-backend = "setuptools.build_meta"
 
 [project]
@@ -9,7 +9,11 @@ description = "Read Divinity II: Developer's Cut's archives and binary XML, name
 readme = "README.md"
 requires-python = ">=3.11"
 license = "MIT"
+authors = [{ name = "ygalsk" }]
 dependencies = []
+
+[project.optional-dependencies]
+dev = ["pytest>=8"]
 
 [project.urls]
 Homepage = "https://github.com/ygalsk/divinity2-lib"

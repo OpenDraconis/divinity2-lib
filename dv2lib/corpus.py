@@ -13,6 +13,7 @@ and 1,824 of the 34,857 paths are in more than one archive.
 """
 from __future__ import annotations
 
+from collections.abc import Callable, Iterable
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -46,19 +47,107 @@ class Entry:
     archive: Path
     entry: archive.Entry
 
+    @property
+    def key(self) -> str:
+        return self.path.lower()
 
-def archives(packed: Path) -> list[Path]:
-    """Every archive the shipped game consults, best first."""
-    out = [packed / n for n in LOAD_ORDER if n not in MOD_SLOTS and (packed / n).exists()]
+
+def archives(packed: Path, *, shipped: bool = True) -> list[Path]:
+    """Every archive the game consults, best first.
+
+    `shipped` leaves out the mod slots, so the answer is the game as Larian shipped it;
+    without it an installed mod wins its paths the way the engine lets it.
+    """
+    out = [packed / n for n in LOAD_ORDER
+           if (packed / n).exists() and not (shipped and n in MOD_SLOTS)]
     out += sorted(p for p in packed.rglob("*.dv2") if p.parent != packed)
     return out
 
 
-def index(packed: Path) -> dict[str, Entry]:
-    """Lower-cased path -> the entry the game would load."""
+#: The last index per (packed, shipped), with the archive list it was read from.
+_index_cache: dict[tuple[str, bool], tuple[tuple, dict[str, Entry]]] = {}
+
+
+def stamp(files: list[Path]) -> tuple:
+    """What makes a cached read stale: an archive added, removed, or written.
+
+    Every cache over the packed data keys on this, so they all go stale together.
+    """
+    out = []
+    for p in files:
+        try:
+            st = p.stat()
+        except OSError:
+            continue
+        out.append((str(p), st.st_mtime_ns, st.st_size))
+    return tuple(out)
+
+
+def _all(packed: Path, shipped: bool) -> dict[str, Entry]:
+    """Every entry of every archive, read once and kept until an archive changes."""
+    ck = (str(packed), shipped)
+    files = archives(packed, shipped=shipped)
+    st = stamp(files)
+    hit = _index_cache.get(ck)
+    if hit is not None and hit[0] == st:
+        return hit[1]
     out: dict[str, Entry] = {}
-    for a in archives(Path(packed)):
+    for a in files:
         with archive.Archive(a) as ar:
             for e in ar:
                 out.setdefault(e.path.lower(), Entry(e.path, a, e))
+    _index_cache[ck] = (st, out)
     return out
+
+
+def index(packed: Path, want: Callable[[str], bool] | None = None, *,
+          shipped: bool = True) -> dict[str, Entry]:
+    """Lower-cased path -> the entry the game would load.
+
+    Reading 500 archive directories costs more than everything a caller does with the
+    answer, and every caller wants a subset of the same thing, so the whole index is
+    read once and filtered in memory."""
+    full = _all(Path(packed), shipped)
+    if want is None:
+        return dict(full)
+    return {k: v for k, v in full.items() if want(k)}
+
+
+def read(entry: Entry) -> bytes:
+    with archive.Archive(entry.archive) as ar:
+        return ar.read(entry.entry)
+
+
+def read_many(entries: Iterable[Entry]) -> dict[str, bytes]:
+    """key -> bytes, opening each archive once."""
+    by_archive: dict[Path, list[Entry]] = {}
+    for e in entries:
+        by_archive.setdefault(e.archive, []).append(e)
+    out: dict[str, bytes] = {}
+    for a, items in by_archive.items():
+        with archive.Archive(a) as ar:
+            for e in items:
+                out[e.key] = ar.read(e.entry)
+    return out
+
+
+def find(packed: Path, suffix: str, *, shipped: bool = True) -> Entry:
+    """The winning entry whose path ends with `suffix`, case-insensitive."""
+    suffix = suffix.lower()
+    hits = index(packed, lambda k: k.endswith(suffix), shipped=shipped)
+    if not hits:
+        raise FileNotFoundError(f"no archive under {packed} holds *{suffix}")
+    if len(hits) > 1:
+        raise LookupError(f"{len(hits)} paths end with {suffix}: {sorted(hits)[:5]}")
+    return next(iter(hits.values()))
+
+
+def owners(packed: Path, paths: Iterable[str]) -> dict[str, str]:
+    """Lower-cased path -> the name of the archive that wins it, mod slots included."""
+    wanted = {p.lower() for p in paths}
+    hits = index(packed, lambda k: k in wanted, shipped=False)
+    return {k: e.archive.name for k, e in hits.items()}
+
+
+def xml_documents(packed: Path, *, shipped: bool = True) -> dict[str, Entry]:
+    return index(packed, lambda k: k.endswith(".xml"), shipped=shipped)

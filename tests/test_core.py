@@ -1,0 +1,117 @@
+"""dv2lib against archives and documents built here: no game files needed."""
+import json
+import struct
+import zlib
+
+import pytest
+
+from dv2lib import archive, binxml, names, nif as nifmod, unpack
+
+
+def dv2(files: dict[str, bytes], compress: bool = True) -> bytes:
+    """A V5 archive, packed tight (align_32k=1)."""
+    table = b"".join(n.encode("latin-1") + b"\0" for n in files)
+    blobs = []
+    for data in files.values():
+        z = zlib.compress(data)
+        blobs.append((z, len(data)) if compress and len(z) < len(data) else (data, 0))
+    start = 22 + len(table) + 4 + 12 * len(blobs)
+    dir_, body = b"", b""
+    for stored, size in blobs:
+        dir_ += struct.pack("<III", len(body), len(stored), size)
+        body += stored
+    head = struct.pack("<IIIBBII", 5, 1, 4, 1, 1, start, len(table))
+    return head + table + struct.pack("<I", len(blobs)) + dir_ + body
+
+
+def block(strings: list[str], nodes: bytes, n_nodes: int, n_attrs: int) -> bytes:
+    table = b"".join(s.encode() + b"\0" for s in strings)
+    return struct.pack("<III", n_nodes, n_attrs, len(table)) + table + nodes
+
+
+def nif(payload: bytes) -> bytes:
+    t = binxml.BLOCK_TYPE.encode()
+    return (b"Gamebryo File Format, Version 20.3.0.9\n" + struct.pack("<IBI", 0x14030009, 1, 0x20000)
+            + struct.pack("<IH", 1, 1) + struct.pack("<I", len(t)) + t + struct.pack("<H", 0)
+            + struct.pack("<I", len(payload)) + struct.pack("<III", 0, 0, 0) + payload)
+
+
+# Root(Name="a") with text "t" and two children <item>x</item>, <item>y</item>, narrow counts.
+ROOT, NAME, ITEM = 0x11111111, 0x002C70A1, 0x003B8EAF
+DOC = block(["t", "a", "x", "y"],
+            struct.pack("<BI", 0x0F, ROOT) + bytes([1]) + struct.pack("<I", NAME) + bytes([2])
+            + struct.pack("<BI", 0x0C, ITEM) + struct.pack("<BI", 0x0C, ITEM), 3, 1)
+
+
+def test_archive_round_trip(tmp_path):
+    files = {"Data\\a.xml": b"x" * 1000, "b.bin": b"\1\2\3"}
+    p = tmp_path / "t.dv2"
+    p.write_bytes(dv2(files))
+    with archive.Archive(p) as ar:
+        assert len(ar) == 2
+        assert [e.is_compressed for e in ar] == [True, False]
+        assert {e.path: ar.read(e) for e in ar} == files
+
+
+def test_archive_refuses(tmp_path):
+    p = tmp_path / "v4.dv2"
+    p.write_bytes(struct.pack("<I", 4) + b"\0" * 30)
+    with pytest.raises(archive.UnsupportedVersion):
+        archive.Archive(p)
+    p.write_bytes(dv2({"a": b"1"})[:-1])
+    with archive.Archive(p) as ar, pytest.raises(archive.ArchiveError):
+        ar.read(ar.entries[0])
+    with pytest.raises(archive.ArchiveError):
+        archive.safe_destination(tmp_path, "../escape")
+
+
+def test_binxml_parse():
+    root = binxml.parse(binxml.payload(nif(DOC)))
+    assert (root.name_hash, root.text, root.attributes, root.narrow) == (ROOT, "t", [(NAME, "a")], True)
+    assert [c.text for c in root.children] == ["x", "y"]          # stream order
+
+
+@pytest.mark.parametrize("bad", [DOC + b"\0", DOC[:-1], DOC[:12 + 8] + b"\xf0" + DOC[21:]])
+def test_binxml_refuses(bad):
+    with pytest.raises(binxml.BinXmlError):
+        binxml.parse(bad)
+
+
+def test_names():
+    assert names.name_of(NAME) == "Name"
+    assert names.name_of(ROOT) is None
+    # every recovered name hashes to the key it is filed under
+    assert all(binxml.hash_of(v) == k for k, v in names.NAMES.items())
+
+
+def test_plain_engine_order_and_unknown():
+    unknown = {}
+    tree = unpack.plain(binxml.parse(DOC), unknown, "x.xml")
+    assert tree["name"] == "#11111111" and unknown == {"#11111111": "x.xml"}
+    assert [c["text"] for c in tree["children"]] == ["y", "x"]   # engine order: reversed
+
+
+def test_unpack_end_to_end(tmp_path):
+    packed = tmp_path / "Packed"
+    packed.mkdir()
+    (packed / "GUI.dv2").write_bytes(dv2({"a.xml": nif(DOC), "b.xml": b"<plain/>"}))
+    meta = unpack.unpack(packed, tmp_path / "out")
+    assert (meta["files"], meta["documents"]) == (2, 1)
+    assert list(meta["unreadable"]) == ["b.xml"]
+    assert json.loads((tmp_path / "out/docs/a.xml.json").read_text())["attrs"] == {"Name": "a"}
+
+
+def test_rewrap_replaces_the_block_and_its_size():
+    old, new = block([], b"", 0, 0), block(["x"], b"", 0, 0)
+    out = binxml.rewrap(nif(old), new)
+    assert binxml.payload(out) == new
+    assert nifmod.parse_header(out).sizes == [len(new)]
+    assert binxml.rewrap(out, old) == nif(old)
+
+
+def test_binxml_build_round_trip_and_widens_counts():
+    root = binxml.parse(DOC)
+    assert binxml.build(binxml.Document(root)) == DOC
+    root.children = [binxml.Node(ITEM, text=str(i)) for i in range(300)]
+    back = binxml.parse(binxml.build(binxml.Document(root)))       # 300 children: no longer one byte
+    assert [c.text for c in back.children] == [str(i) for i in range(300)] and not back.narrow

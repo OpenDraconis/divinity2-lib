@@ -8,10 +8,13 @@ from __future__ import annotations
 
 import struct
 from dataclasses import dataclass, field
+from typing import Iterator
 
-from . import Dv2Error
+from . import Dv2Error, codec, nif
+from .larian_hash import name_hash as _hash    # the field of the same name shadows it inside Node
+from .names import name_of
 
-NIF_MAGIC = b"Gamebryo File Format"
+NIF_MAGIC = nif.MAGIC
 BLOCK_TYPE = "xml::dom::CStreamableNode"
 
 HAS_CHILDREN = 0x01
@@ -25,48 +28,118 @@ class BinXmlError(Dv2Error):
     pass
 
 
+def hash_of(name: str) -> int:
+    """The hash of an element or attribute name, or a literal `#hhhhhhhh` hash written out."""
+    if name.startswith("#"):
+        try:
+            return int(name[1:], 16)
+        except ValueError:
+            raise BinXmlError(f"malformed hash {name!r}; want #hhhhhhhh") from None
+    return _hash(name)
+
+
 @dataclass
 class Node:
     name_hash: int
     attributes: list[tuple[int, str]] = field(default_factory=list)
     text: str | None = None
     children: list["Node"] = field(default_factory=list)
+    narrow: bool = True
+
+    @property
+    def name(self) -> str:
+        """The element name, or the hash in hex if it has not been recovered."""
+        return name_of(self.name_hash) or f"#{self.name_hash:08x}"
+
+    def attr(self, name: str) -> str | None:
+        wanted = _hash(name)
+        return next((v for h, v in self.attributes if h == wanted), None)
+
+    def walk(self) -> Iterator["Node"]:
+        yield self
+        for c in self.children:
+            yield from c.walk()
+
+    def find(self, name: str) -> Iterator["Node"]:
+        """Every descendant with this element name, including self."""
+        wanted = _hash(name)
+        return (n for n in self.walk() if n.name_hash == wanted)
+
+    # ---- writing ---------------------------------------------------------
+    #
+    # A document read here is edited in place and written back by `build()`. These are the
+    # four moves that takes, and nothing in them is particular to one kind of document.
+
+    def copy(self) -> "Node":
+        """A deep copy: the children come along, the parent does not."""
+        return Node(self.name_hash, list(self.attributes), self.text,
+                    [c.copy() for c in self.children], self.narrow)
+
+    def child(self, name: str, create: bool = True) -> "Node | None":
+        """The first child of this name, made if it is not there. `None` when `create` is off."""
+        h = hash_of(name)
+        c = next((k for k in self.children if k.name_hash == h), None)
+        if c is None and create:
+            c = Node(h)
+            self.children.append(c)
+        return c
+
+    def set_attr(self, name: str, value: str | None) -> None:
+        """Set one attribute, keeping its place. `None` removes it."""
+        h = hash_of(name)
+        for i, (ah, _) in enumerate(self.attributes):
+            if ah == h:
+                if value is None:
+                    del self.attributes[i]
+                else:
+                    self.attributes[i] = (h, value)
+                return
+        if value is not None:
+            self.attributes.append((h, value))
+
+    def set_items(self, name: str, values: list[str], text: str | None = None) -> None:
+        """`<name><item>a</item><item>b</item></name>`, replacing what was there.
+
+        `text` is what the container itself carries. Larian's own files disagree about it —
+        a quest container holds nothing, a dialog container holds the tabs it was indented
+        with — so the caller says which, and the default writes nothing.
+        """
+        c = self.child(name)
+        c.children = [Node(hash_of("item"), text=v) for v in values]
+        c.text = text
+
+    def __repr__(self) -> str:
+        return (f"<{self.name} {' '.join(f'{name_of(h) or hex(h)}={v!r}' for h, v in self.attributes)}"
+                f"{f' text={self.text!r}' if self.text is not None else ''}"
+                f"{f' ({len(self.children)} children)' if self.children else ''}>")
+
+
+@dataclass
+class Document:
+    root: Node
+
+
+def _header(data: bytes) -> nif.Header:
+    if not data.startswith(NIF_MAGIC):
+        raise BinXmlError("not a NIF file - binary XML is always NIF-wrapped")
+    h = nif.parse_header(data)
+    if h.types != [BLOCK_TYPE]:
+        raise BinXmlError(f"not binary XML; this file holds {h.types}")
+    if len(h.sizes) != 1:
+        raise BinXmlError(f"expected one block, found {len(h.sizes)}")
+    return h
 
 
 def payload(data: bytes) -> bytes:
-    """The one block of a NIF-wrapped binary XML file.
+    """The one block of a NIF-wrapped binary XML file."""
+    h = _header(data)
+    return data[h.end:h.end + h.sizes[0]]
 
-    The header at NIF 20.3.0.9: a version line, version, endianness, user
-    version, block count, block type names, a type index and a size per block,
-    the string table, then the groups. The block follows.
-    """
-    if not data.startswith(NIF_MAGIC):
-        raise BinXmlError("not a NIF file - binary XML is always NIF-wrapped")
-    try:
-        pos = data.index(b"\n") + 1
-        pos += 4                                   # version
-        if data[pos] != 1:
-            raise BinXmlError(f"big-endian NIF not supported (endian={data[pos]})")
-        pos += 1 + 4                               # endianness, user version
-        num_blocks, = struct.unpack_from("<I", data, pos); pos += 4
-        num_types, = struct.unpack_from("<H", data, pos); pos += 2
-        types = []
-        for _ in range(num_types):
-            n, = struct.unpack_from("<I", data, pos); pos += 4
-            types.append(data[pos:pos + n].decode("latin-1")); pos += n
-        pos += 2 * num_blocks                      # block type index
-        sizes = struct.unpack_from(f"<{num_blocks}I", data, pos); pos += 4 * num_blocks
-        num_strings, = struct.unpack_from("<I", data, pos); pos += 8   # and max length
-        for _ in range(num_strings):
-            n, = struct.unpack_from("<I", data, pos); pos += 4 + n
-        num_groups, = struct.unpack_from("<I", data, pos); pos += 4 + 4 * num_groups
-    except (struct.error, IndexError, ValueError) as exc:
-        raise BinXmlError(f"truncated NIF header: {exc}") from None
-    if types != [BLOCK_TYPE]:
-        raise BinXmlError(f"not binary XML; this file holds {types}")
-    if len(sizes) != 1:
-        raise BinXmlError(f"expected one block, found {len(sizes)}")
-    return data[pos:pos + sizes[0]]
+
+def rewrap(data: bytes, block: bytes) -> bytes:
+    """`data` with its one block replaced by `block`, the header's size field updated."""
+    _header(data)
+    return nif.set_block(data, 0, block)
 
 
 def parse(data: bytes) -> Node:
@@ -121,7 +194,7 @@ def parse(data: bytes) -> Node:
         at += 5
         nodes += 1
 
-        out = Node(name_hash=h)
+        out = Node(name_hash=h, narrow=bool(flags & NARROW_COUNTS))
         if flags & HAS_TEXT:
             out.text = take_string()
         if flags & HAS_ATTRIBUTES:
@@ -149,3 +222,47 @@ def parse(data: bytes) -> Node:
     if next_string != len(strings):
         raise BinXmlError(f"used {next_string} of {len(strings)} strings")
     return root
+
+
+def build(doc: Document) -> bytes:
+    """Serialise a document back to the bytes of a CStreamableNode block."""
+    values: list[str] = []
+    body = bytearray()
+    counts = [0, 0]              # nodes, attributes: counted while emitting, not in two more walks
+
+    def emit(node: Node) -> None:
+        counts[0] += 1
+        counts[1] += len(node.attributes)
+        flags = 0
+        if node.children:
+            flags |= HAS_CHILDREN
+        if node.attributes:
+            flags |= HAS_ATTRIBUTES
+        if node.text is not None:
+            flags |= HAS_TEXT
+        # A count that no longer fits in a byte forces the wide form, so
+        # adding children to a node keeps producing a readable file.
+        narrow = node.narrow and max(len(node.attributes), len(node.children)) < 256
+        if narrow:
+            flags |= NARROW_COUNTS
+
+        body.extend(struct.pack("<BI", flags, node.name_hash))
+        pack = (lambda n: struct.pack("<B", n)) if narrow else \
+               (lambda n: struct.pack("<I", n))
+        if node.text is not None:          # the text before the attribute values, as read
+            values.append(node.text)
+        if node.attributes:
+            body.extend(pack(len(node.attributes)))
+            for h, v in node.attributes:
+                body.extend(struct.pack("<I", h))
+                values.append(v)
+        if node.children:
+            body.extend(pack(len(node.children)))
+        for c in node.children:
+            emit(c)
+
+    emit(doc.root)
+
+    n_nodes, n_attrs = counts
+    table = b"".join(codec.encode(v) + b"\x00" for v in values)
+    return struct.pack("<III", n_nodes, n_attrs, len(table)) + table + bytes(body)

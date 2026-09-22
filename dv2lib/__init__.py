@@ -1,12 +1,13 @@
-"""Read Divinity II: Developer's Cut's own files: its archives, and the binary XML in them, named.
+"""Divinity II: Developer's Cut's own files: its archives, the binary XML in them, named,
+and the Osiris story and savegames. Read, and written where a mod needs it.
 
     python -m dv2lib unpack <out> [<game folder>]
 
 Standard library only, so it runs anywhere Python 3.11 does, Blender's included.
-Taken from dv2mod (https://github.com/ygalsk/dv2-mod), which owns the research.
+The focused reader shared by the tools, Blender, and Unity workflows.
 """
 
-__version__ = "0.1.0"
+__version__ = "0.2.0"
 
 
 class Dv2Error(Exception):

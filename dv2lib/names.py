@@ -1149,6 +1149,21 @@ PDB_HITS: dict[int, str] = {
 }
 NAMES.update(PDB_HITS)
 
+#: Recovered 2026-09-17 from the dialog loader (native measurement: dialog-graph.md 1.3): the
+#: names it compares, confirmed by the hash. The two track elements it walks by position, so
+#: theirs are hash matches only; the element above them (`#00011d68`) is still open.
+DIALOG_HITS: dict[int, str] = {
+    0x002f4c9e: 'Shot',                 # CGameDialogIO_V20::ReadXML @ad9760
+    0x83197f53: 'CueSpanish',           # CBaseNode::GetLanguageCueTag @a22460: "Cue" + language
+    0x8aa6a73f: 'CueItalian',           # CBaseNode::GetLanguageCueTag @a22460
+    0x4c8df8f0: 'xsi:type',             # CNodeV20::ProcessAnimationData @a271c0, ProcessCameraData @a25f20
+    0x00000df6: 'im',                   # CNodeV20::ProcessCameraData @a25f20
+    0x0001c126: 'fsm',                  # CNodeV20::ProcessCameraData @a25f20
+    0xc4929e48: 'AnimationTracks',      # hash match only: walked by position (a271dd)
+    0xa11bb735: 'AnimationTrack',       # hash match only: walked by position (a273a9)
+}
+NAMES.update(DIALOG_HITS)
+
 
 def name_of(value: int) -> str | None:
     """The name behind a hash, or None if it was never recovered."""
