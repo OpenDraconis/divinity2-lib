@@ -8,6 +8,7 @@ building and installing mods is [divinity2-tools](https://github.com/ygalsk/divi
 - the engine's archive search order, and which entry wins a path
 - binary XML read and written, and the names behind its hashes
 - the Osiris story: read, written, decompiled; savegames and the state they load
+- Wwise sound banks: the media and the objects
 - unpacking to named JSON
 
 Python 3.11+ is required. Game data is not included.
@@ -51,6 +52,8 @@ tree = unpack.plain(binxml.parse(binxml.payload(data)), {}, entry.path)
 | `osiris_story`, `osiris_write`, `osiris_source` | the Osiris story: read, written, decompiled |
 | `story` | an episode's story, from its initial savegame |
 | `savegame`, `savestate` | savegames, and the engine state they load |
+| `wwise` | Wwise sound banks: media, objects, event IDs |
+| `dialog` | the animation packs a dialog loads |
 | `unpack` | named JSON export |
 | `locate` | game discovery |
 

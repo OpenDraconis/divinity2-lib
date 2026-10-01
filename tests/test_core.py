@@ -115,3 +115,29 @@ def test_binxml_build_round_trip_and_widens_counts():
     root.children = [binxml.Node(ITEM, text=str(i)) for i in range(300)]
     back = binxml.parse(binxml.build(binxml.Document(root)))       # 300 children: no longer one byte
     assert [c.text for c in back.children] == [str(i) for i in range(300)] and not back.narrow
+
+
+def test_wwise_bank_event_to_media():
+    from dv2lib import wwise
+
+    def chunk(tag, body):
+        return tag + struct.pack("<I", len(body)) + body
+
+    def obj(kind, body):
+        return struct.pack("<II", kind, len(body)) + body
+
+    node = (b"\0\0" + struct.pack("<II", 0, 0) + bytes([50, 0, 0, 246]) + struct.pack("<12fI", *[0.0] * 12, 0)
+            + b"\0" + bytes([1, 0]) + struct.pack("<H", 0) + bytes([0, 0, 0]) + b"\0" + struct.pack("<HH", 0, 0))
+    sound = obj(2, struct.pack("<IIIIIIIB", 3, 0x40001, 0, 7, 9, 0, 4, 0) + node + struct.pack("<3h", 1, 0, 0))
+    play = obj(3, struct.pack("<IIIiiiI", 2, 0x4011, 3, 0, 0, 0, 33) + struct.pack("<iiiB", 0, 0, 0, 4)
+               + bytes(16) + struct.pack("<II", 0, 9))
+    event = obj(4, struct.pack("<III", wwise.id_of("Play_It"), 1, 2))
+    bank = (chunk(b"BKHD", struct.pack("<4I", 48, 9, 0, 0) + bytes(12))
+            + chunk(b"DIDX", struct.pack("<III", 7, 0, 4)) + chunk(b"DATA", b"RIFF")
+            + chunk(b"HIRC", struct.pack("<I", 3) + sound + play + event))
+    b = wwise.read(bank)
+    ev = b.objects[wwise.id_of("play_it")]
+    act = b.objects[ev["actions"][0]]
+    assert (act["action"], act["fade_curve"], act["file"]) == ("Play", "Linear", 9)
+    assert b.media[b.objects[act["target"]]["source"]["source"]] == b"RIFF"
+    assert wwise.id_of("aleroth_AD_heal2") == 741412071        # measured: the bank's own STID entry
