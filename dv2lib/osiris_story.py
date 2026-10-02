@@ -73,7 +73,7 @@ VER_TYPE_MAP = (1, 5)
 VER_QUERY = (1, 6)
 
 
-# COsiris::_ReadHeader @ec4200 decomp
+# COsiris::_ReadHeader @d61c90 decomp
 def read_header(b: Buf) -> Header:
     lead = b.u8()
     banner = b.cstr()
@@ -97,7 +97,7 @@ class DivObject:
     key: tuple
 
 
-# COsiris::_ReadDIVObjects @ec4cd0 decomp
+# COsiris::_ReadDIVObjects @d62760 decomp
 def read_div_objects(b: Buf) -> list:
     n = b.u32()
     out = []
@@ -147,7 +147,7 @@ def read_signature(b: Buf) -> tuple:
     return name, mask, params, outs
 
 
-# COsiris::_ReadFunctions @ec4db0 decomp
+# COsiris::_ReadFunctions @d62840 decomp
 def read_functions(b: Buf) -> list:
     n = b.u32()
     out = []
@@ -310,7 +310,7 @@ def _read_rel_node(b: Buf, n: Node) -> None:
     n.fields["rel_indirection"] = b.u8()
 
 
-# COsiris::_ReadReteNodes @ec44b0 decomp
+# COsiris::_ReadReteNodes @d61f40 decomp
 def read_node(b: Buf) -> Node:
     t = b.u8()
     if t not in NODE_TYPES:
@@ -452,7 +452,7 @@ class Story:
         return tn
 
 
-# COsiris::Load @ec7860 decomp
+# LoadTaskData::GetVersion @ec7860 decomp
 def read_story(data: bytes) -> Story:
     b = Buf(data)
     h = read_header(b)

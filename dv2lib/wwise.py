@@ -180,7 +180,7 @@ def _source(r: _Reader, version: int) -> dict:
 COMPRESSOR_FX, PEAK_LIMITER_FX = 0x6C0003, 0x6E0003
 
 
-# CAkCompressorFXParams::SetParamsBlock @d94ec0, CAkPeakLimiterFXParams::SetParamsBlock @d93f70 decomp
+# CAkCompressorFXParams::SetParamsBlock @d94ec0 decomp, CAkPeakLimiterFXParams::SetParamsBlock @d93f70 decomp
 def _fx_params(kind: int, raw: bytes) -> dict | None:
     if kind not in (COMPRESSOR_FX, PEAK_LIMITER_FX) or len(raw) < 22:
         return None
@@ -268,7 +268,7 @@ def _rtpcs(r: _Reader) -> list[dict]:
     return out
 
 
-# CAkParentNode<CAkParameterNode>::SetChildren @dfa440 decomp
+# CAkParentNode::SetChildren @dfa440 decomp
 def _children(r: _Reader) -> list[int]:
     return [r.u32() for _ in range(r.u32())]
 
@@ -300,7 +300,7 @@ def _actor_mixer(r, o, bank):
     o["children"] = _children(r)
 
 
-# CAkLayerCntr::SetInitialValues @dff6f0, CAkLayer::SetInitialValues @e092c0 decomp
+# CAkLayerCntr::SetInitialValues @dff6f0 decomp, CAkLayer::SetInitialValues @e092c0 decomp
 def _layer_cntr(r, o, bank):
     o["node"] = _node_base(r, bank)
     o["children"] = _children(r)
@@ -369,7 +369,7 @@ def _attenuation(r, o, bank):
     o["rtpc"] = _rtpcs(r)
 
 
-# CAkBus::SetInitialValues @df5b40, CAkBus::AddDuck @df5aa0 decomp
+# CAkBus::SetInitialValues @df5b40 decomp, CAkBus::AddDuck @df5aa0 decomp
 def _bus(r, o, bank):
     o["override_bus"] = r.u32()
     o["volume"], o["lfe"], o["pitch"], o["lpf"] = r.f32(), r.f32(), r.f32(), r.f32()

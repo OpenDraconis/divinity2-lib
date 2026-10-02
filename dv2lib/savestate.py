@@ -56,64 +56,64 @@ class Visitor:
         self.d += b
         return b
 
-    # CRpgStats_V2_LoadBinaryVisitor::LoadSaveImpl(int*) @98b0e0 decomp
+    # CRpgStats_V2_LoadBinaryVisitor::LoadSaveImpl @98b0e0 decomp
     def int(self, x=0) -> int:
         return self._io("<i", (x,))[0]
 
-    # CRpgStats_V2_LoadBinaryVisitor::LoadSaveImpl(uint*) @98b6a0 decomp
+    # CRpgStats_V2_LoadBinaryVisitor::LoadSaveImpl @98b6a0 decomp
     def uint(self, x=0) -> int:
         return self._io("<I", (x,))[0]
 
-    # CRpgStats_V2_LoadBinaryVisitor::LoadSaveImpl(ushort*) @98b6d0 decomp
+    # CRpgStats_V2_LoadBinaryVisitor::LoadSaveImpl @98b6d0 decomp
     def short(self, x=0) -> int:
         return self._io("<H", (x,))[0]
 
-    # CRpgStats_V2_LoadBinaryVisitor::LoadSaveImpl(float*) @98b110 decomp
+    # CRpgStats_V2_LoadBinaryVisitor::LoadSaveImpl @98b110 decomp
     def float(self, x=0.0) -> float:
         return self._io("<f", (x,))[0]
 
-    # CRpgStats_V2_LoadBinaryVisitor::LoadSaveImpl(bool*) @98b1a0 decomp
+    # CRpgStats_V2_LoadBinaryVisitor::LoadSaveImpl @98b1a0 decomp
     def bool(self, x=False) -> bool | int:
         b = self._io("<B", (x if type(x) is int else 1 if x else 0,))[0]
         return b if b > 1 else b == 1
 
-    # CRpgStats_V2_LoadBinaryVisitor::LoadSaveImpl(std::string*) @98b490 decomp
+    # CRpgStats_V2_LoadBinaryVisitor::LoadSaveImpl @98b490 decomp
     def string(self, x="") -> str:
         b = b"" if self.reading else x.encode("latin-1")
         return self.raw(self.uint(len(b)), b).decode("latin-1")
 
     chars = string
 
-    # CRpgStats_V2_LoadBinaryVisitor::LoadSaveImpl(TLoadSaveCharBuffer*) @98b730 decomp
+    # CRpgStats_V2_LoadBinaryVisitor::LoadSaveImpl @98b730 decomp
     def buffer(self, n: int, b: bytes = b"") -> bytes:
         self.uint(n)
         return self.raw(n, b)
 
-    # CRpgStats_V2_LoadBinaryVisitor::LoadSaveImpl(NiPoint3*) @98b1d0 decomp
+    # CRpgStats_V2_LoadBinaryVisitor::LoadSaveImpl @98b1d0 decomp
     def point3(self, x=(0.0,) * 3) -> list[float]:
         return list(self._io("<3f", x))
 
-    # CRpgStats_V2_LoadBinaryVisitor::LoadSaveImpl(NiPoint2*) @98b250 decomp
+    # CRpgStats_V2_LoadBinaryVisitor::LoadSaveImpl @98b250 decomp
     def point2(self, x=(0.0,) * 2) -> list[float]:
         return list(self._io("<2f", x))
 
-    # CRpgStats_V2_LoadBinaryVisitor::LoadSaveImpl(NiColor*) @98b2b0 decomp
+    # CRpgStats_V2_LoadBinaryVisitor::LoadSaveImpl @98b2b0 decomp
     def color(self, x=(0.0,) * 3) -> list[float]:
         return list(self._io("<3f", x))
 
-    # CRpgStats_V2_LoadBinaryVisitor::LoadSaveImpl(NiColorA*) @98b330 decomp
+    # CRpgStats_V2_LoadBinaryVisitor::LoadSaveImpl @98b330 decomp
     def colora(self, x=(0.0,) * 4) -> list[float]:
         return list(self._io("<4f", x))
 
-    # CRpgStats_V2_LoadBinaryVisitor::LoadSaveImpl(NiBound*) @98b3c0 decomp
+    # CRpgStats_V2_LoadBinaryVisitor::LoadSaveImpl @98b3c0 decomp
     def bound(self, x=(0.0,) * 4) -> list[float]:
         return list(self._io("<4f", x))
 
-    # CRpgStats_V2_LoadBinaryVisitor::LoadSaveImpl(NiMatrix3*) @98af50 decomp
+    # CRpgStats_V2_LoadBinaryVisitor::LoadSaveImpl @98af50 decomp
     def matrix3(self, x=(0.0,) * 9) -> list[float]:
         return list(self._io("<9f", x))
 
-    # GetSetAmountOfChildren @98b7a0 decomp
+    # CRpgStats_V2_LoadBinaryVisitor::GetSetAmountOfChildren @98b7a0 decomp
     def count(self, seq) -> int:
         return self.uint(len(seq))
 
@@ -130,7 +130,7 @@ class Visitor:
     def since(self, major: int, minor: int) -> bool:
         return self.version >= (major, minor)
 
-    # BeginObject @98bee0, EndObject @98bdc0 decomp
+    # CRpgStats_V2_LoadBinaryVisitor::BeginObject @98bee0 decomp, CRpgStats_V2_LoadBinaryVisitor::EndObject @98bdc0 decomp
     def begin(self, checksum: int = 0) -> None:
         if self.objects:
             self.uint(checksum)
@@ -140,7 +140,7 @@ def _fixed(v: Visitor, seq, n: int, kind: str) -> list:
     return [getattr(v, kind)(seq[i]) for i in range(n)]
 
 
-# CRpgStats_V2_TrophiesManager::GameSaveLoad @97b920, CRpgStats_V2_Trophy::GameSaveLoad @97b2a0 decomp
+# CRpgStats_V2_TrophiesManager::GameSaveLoad @97b920 decomp, CRpgStats_V2_Trophy::GameSaveLoad @97b2a0 decomp
 def trophies(v: Visitor, d) -> dict:
     v.begin()
     out = []
@@ -352,7 +352,7 @@ def battle_tower(v: Visitor, d) -> dict:
     return out
 
 
-# CRpgstats_V2_Alignment::GameSaveLoad @964b10, CRpgstats_V2_AlignmentMap::GameSaveLoad @a76590 decomp
+# CRpgstats_V2_Alignment::GameSaveLoad @964b10 decomp, CRpgstats_V2_AlignmentMap::GameSaveLoad @a76590 decomp
 def alignment(v: Visitor, d) -> dict:
     v.begin()
     out = {"Groups": [{"GroupName": v.string(g["GroupName"]), "ParentNames": v.many(g["ParentNames"], "string")}
@@ -367,7 +367,7 @@ def alignment(v: Visitor, d) -> dict:
     return out
 
 
-# CRpgStats_V2_WayPointManager::GameSaveLoad @93b990, CRpgStats_V2_WayPoint::GameSaveLoad @a1ac30 decomp
+# CRpgStats_V2_WayPointManager::GameSaveLoad @93b990 decomp, CRpgStats_V2_WayPoint::GameSaveLoad @a1ac30 decomp
 def waypoints(v: Visitor, d) -> dict:
     v.begin()
     out = []
@@ -380,7 +380,7 @@ def waypoints(v: Visitor, d) -> dict:
     return {"WayPoints": out}
 
 
-# CGameLogic_MapMarker_Manager::GameSaveLoad @9399c0, CGameLogic_MapMarker::GameSaveLoad @939430 decomp
+# CGameLogic_MapMarker_Manager::GameSaveLoad @9399c0 decomp, CGameLogic_MapMarker::GameSaveLoad @939430 decomp
 def map_markers(v: Visitor, d) -> dict:
     v.begin()
     out = []
@@ -454,7 +454,7 @@ def _unb64(x) -> bytes:
     return b"" if x is ABSENT else base64.b64decode(x)
 
 
-# CLuaVariableManager::GameSaveLoad @8f5e60, CLuaVariableManager_Key2Table::GameSaveLoad @8f5900 decomp
+# CLuaVariableManager::GameSaveLoad @8f5e60 decomp, CLuaVariableManager_Key2Table::GameSaveLoad @8f5900 decomp
 def lua_variables(v: Visitor, d) -> dict:
     v.begin()
     out = {"Lists": {}}
@@ -539,7 +539,7 @@ def _trigger_orientation(v: Visitor, t) -> dict:
     return {**_trigger_point(v, t), "Rotate": v.matrix3(t["Rotate"])}
 
 
-# CRpgStats_V2_Trigger_Area::InheritedGameSaveLoad @9c8900, CPolyArea::GameSaveLoad @77ef60 decomp
+# CRpgStats_V2_Trigger_Area::InheritedGameSaveLoad @9c8900 decomp, CPolyArea::GameSaveLoad @77ef60 decomp
 def _trigger_area(v: Visitor, t) -> dict:
     out = _trigger(v, t)
     out["Points"] = [v.record(p, ID="string", Point="point3") for p in v.each(t["Points"])]
@@ -609,7 +609,7 @@ def triggers(v: Visitor, d) -> dict:
     return {"Triggers": out}
 
 
-# CDialogManager::GameSaveLoad @874300, CRpgStats_V2_EventManager::GameSaveLoad @80c0d0, CRpgStats_V2_GlobalEventManager::SetEventState @80bc20 decomp
+# CDialogManager::GameSaveLoad @874300 decomp, CRpgStats_V2_EventManager::GameSaveLoad @80c0d0 decomp, CRpgStats_V2_GlobalEventManager::SetEventState @80bc20 decomp
 def dialogs(v: Visitor, d) -> dict:
     v.begin()
     out = {}
@@ -619,7 +619,7 @@ def dialogs(v: Visitor, d) -> dict:
     return out
 
 
-# CRpgStats_V2_InventoryManager::GameSaveLoad @96ca40, CRpgStats_V2_Inventory::GameSaveLoad @8c7cc0 decomp
+# CRpgStats_V2_InventoryManager::GameSaveLoad @96ca40 decomp, CRpgStats_V2_Inventory::GameSaveLoad @8c7cc0 decomp
 def inventories(v: Visitor, d) -> dict:
     v.begin()
     out = []
@@ -706,7 +706,7 @@ def _item(v: Visitor, r) -> dict:
     return rec
 
 
-# CRpgStats_V2_ItemManager::GameSaveLoad @8a6ac0, CRpgStats_V2_ItemManager::CalculateCheckSum @8a3d80 decomp
+# CRpgStats_V2_ItemManager::GameSaveLoad @8a6ac0 decomp, CRpgStats_V2_ItemManager::CalculateCheckSum @8a3d80 decomp
 def items(v: Visitor, d) -> dict:
     v.begin(sum("UUID" in r for r in d["Items"]))
     slots = v.each(d["Items"])
@@ -720,7 +720,7 @@ def items(v: Visitor, d) -> dict:
     return out
 
 
-# CRpgStats_V2_Stat_Collection::GameSaveLoad @a0cc00, CRpgStats_V2_Stat::GameSaveLoad @a0b930 decomp
+# CRpgStats_V2_Stat_Collection::GameSaveLoad @a0cc00 decomp, CRpgStats_V2_Stat::GameSaveLoad @a0b930 decomp
 def _stat_collection(v: Visitor, s) -> list:
     v.begin()
     out = []
@@ -734,7 +734,7 @@ def _stat_collection(v: Visitor, s) -> list:
     return out
 
 
-# CRpgStats_V2_CharacterState::GameSaveLoad @99b810, CRpgstats_V2_Reputation::GameSaveLoad @a4f4d0, CRpgstats_V2_Status_Manager::GameSaveLoad @9b05e0 decomp
+# CRpgStats_V2_CharacterState::GameSaveLoad @99b810 decomp, CRpgstats_V2_Reputation::GameSaveLoad @a4f4d0 decomp, CRpgstats_V2_Status_Manager::GameSaveLoad @9b05e0 decomp
 def _character_state(v: Visitor, s) -> dict:
     v.begin()
     rec = {"CHXP": v.bool(s["CHXP"])} if v.since(1, 0x15) else {}
@@ -786,7 +786,7 @@ def _ai_controller(v: Visitor, c, kind: int) -> dict | None:
 AI_CONTROLLERS = ("Combat", "Dialog", "EventManager", "Osiris", "Repel", "Lua", "Status", "UserInput")
 
 
-# CRpgStats_V2_Character::GameSaveLoad @846580, CRpgStats_V2_Character_Relations::GameSaveLoad @a07940 decomp
+# CRpgStats_V2_Character::GameSaveLoad @846580 decomp, CRpgStats_V2_Character_Relations::GameSaveLoad @a07940 decomp
 def _character(v: Visitor, r) -> dict:
     v.begin()
     rec = v.record(r, RegionName="string", SubRegionName="string", Translate="point3", Rotate="matrix3",
@@ -844,7 +844,7 @@ def characters(v: Visitor, d) -> dict:
     return out
 
 
-# CRpgStats_V2_FlyingFortress_Manager_Building::GameSaveLoad @8adcd0, CRpgStats_V2_FlyingFortress_Building::GameSaveLoad @a03870 decomp
+# CRpgStats_V2_FlyingFortress_Manager_Building::GameSaveLoad @8adcd0 decomp, CRpgStats_V2_FlyingFortress_Building::GameSaveLoad @a03870 decomp
 def fortresses(v: Visitor, d) -> dict:
     v.begin()
     slots = v.each(d["Buildings"])
@@ -867,7 +867,7 @@ def fortresses(v: Visitor, d) -> dict:
     return out
 
 
-# CRpgStats_V2_TrapManager::GameSaveLoad @902150, CRpgStats_V2_TrapScript::GameSaveLoad @a11740 decomp
+# CRpgStats_V2_TrapManager::GameSaveLoad @902150 decomp, CRpgStats_V2_TrapScript::GameSaveLoad @a11740 decomp
 def traps(v: Visitor, d) -> dict:
     v.begin()
     out = []
@@ -886,7 +886,7 @@ def traps(v: Visitor, d) -> dict:
     return {"Traps": out}
 
 
-# CRpgStats_V2_SkillTrainerManager::GameSaveLoad @78bdb0, CRpgStats_V2_SkillTrainer::GameSaveLoad @78ba80 decomp
+# CRpgStats_V2_SkillTrainerManager::GameSaveLoad @78bdb0 decomp, CRpgStats_V2_SkillTrainer::GameSaveLoad @78ba80 decomp
 def skill_trainers(v: Visitor, d) -> dict:
     v.begin()
     out = []
@@ -910,7 +910,7 @@ def _treasure_group(v: Visitor, g) -> dict:
                     MaxCharmAmount="int", RarityChance="float", ItemUniqueness="string")
 
 
-# CRpgStats_V2_TreasureManager::GameSaveLoad @9822a0, CRpgStats_V2_TreasureGroup_Collection::GameSaveLoad @a4ad40 decomp
+# CRpgStats_V2_TreasureManager::GameSaveLoad @9822a0 decomp, CRpgStats_V2_TreasureGroup_Collection::GameSaveLoad @a4ad40 decomp
 def treasures(v: Visitor, d) -> dict:
     v.begin()
     out = []

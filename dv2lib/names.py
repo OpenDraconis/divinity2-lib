@@ -1108,49 +1108,49 @@ CANDIDATE_HITS: dict[int, str] = {
 NAMES.update(CANDIDATE_HITS)
 
 PDB_HITS: dict[int, str] = {
-    # CAtmosphere::LoadXML decomp
+    # CAtmosphere::LoadXML @6d1620 decomp
     0x57f943fd: 'ClassicFogColor',
-    # CAtmosphere::LoadXML decomp
+    # CAtmosphere::LoadXML @6d1620 decomp
     0x353309f9: 'fClassicFogDepth',
-    # CAtmosphere::LoadXML decomp
+    # CAtmosphere::LoadXML @6d1620 decomp
     0x5dbfc55f: 'fPPBrightness',
-    # CSky::LoadXML decomp
+    # CSky::LoadXML @727880 decomp
     0x0be6afd4: 'fPPContrast',
-    # CSky::LoadXML decomp
+    # CSky::LoadXML @727880 decomp
     0xf3c2f888: 'fPPHue',
-    # CSky::LoadXML decomp
+    # CSky::LoadXML @727880 decomp
     0x58b27f30: 'fPPSaturation',
-    # CCloudDome::LoadXML decomp
+    # CCloudDome::LoadXML @724020 decomp
     0x3e78e416: 'fCloudBrightness',
-    # CCloudDome::LoadXML decomp
+    # CCloudDome::LoadXML @724020 decomp
     0x5feffbbd: 'fCloudDensity',
-    # CCloudDome::LoadXML decomp
+    # CCloudDome::LoadXML @724020 decomp
     0xc9490f45: 'ShadowColor',
-    # CCloudColorSetting::GetName decomp
+    # CCloudColorSetting::GetName @4642b0 decomp
     0xc06bbab6: 'CloudColor',
-    # CCascadedShadowMap::SaveXML decomp
+    # CCascadedShadowMap::SaveXML @71c4c0 decomp
     0x41d8ccba: 'fSplitWeight',
-    # CSky::LoadXML decomp
+    # CSky::LoadXML @727880 decomp
     0x00000a18: 'Km',
-    # CSky::LoadXML decomp
+    # CSky::LoadXML @727880 decomp
     0x00000a1d: 'Kr',
-    # CAtmosphere::LoadXML decomp
+    # CAtmosphere::LoadXML @6d1620 decomp
     0x0001f777: 'sky',
-    # CLightManager::LoadXML decomp
+    # CLightManager::LoadXML @6b73b0 decomp
     0x00017096: 'Sun',
-    # CTerrainPatchDataManager::LoadXML decomp
+    # CTerrainPatchDataManager::LoadXML @735c30 decomp
     0x0001f8aa: 'sub',
-    # CRpgStats_V2_CharacterState::LoadXML decomp
+    # CRpgStats_V2_CharacterState::LoadXML @99b4e0 decomp
     0x00000ba8: 'XP',
     0x0001dda4: 'min',
     0x0001547e: 'Map',
     # CGameLogic_Init::LoadXML decomp
     0x24771d7b: 'gamelogic_init',
-    # GameControlSettings::LoadXML decomp
+    # GameControlSettings::LoadXML @98e300 decomp
     0xa024030b: 'GamePadSensitivityHumanPitch',
-    # GameControlSettings::LoadXML decomp
+    # GameControlSettings::LoadXML @98e300 decomp
     0xb0ed2324: 'GamePadSensitivityHumanYaw',
-    # GameControlSettings::LoadXML decomp
+    # GameControlSettings::LoadXML @98e300 decomp
     0xb8d1b0f5: 'HumanMinPitch',
     0x8bd578bc: 'InvertFlyY',
     0xfc836a31: 'InvertY',
@@ -1169,7 +1169,7 @@ DIALOG_HITS: dict[int, str] = {
     0x83197f53: 'CueSpanish',
     # CBaseNode::GetLanguageCueTag @a22460 decomp
     0x8aa6a73f: 'CueItalian',
-    # CNodeV20::ProcessAnimationData @a271c0, ProcessCameraData @a25f20 decomp
+    # CNodeV20::ProcessAnimationData @a271c0 decomp, CNodeV20::ProcessCameraData @a25f20 decomp
     0x4c8df8f0: 'xsi:type',
     # CNodeV20::ProcessCameraData @a25f20 decomp
     0x00000df6: 'im',
@@ -1199,7 +1199,7 @@ RECOVERED_HITS: dict[int, str] = {
     0x647f7ac5: 'AlternateSpawnPoint2',
     0x647f7ac6: 'AlternateSpawnPoint3',
     0x647f7ac7: 'AlternateSpawnPoint4',
-    # CRpgStats_V2_Trigger_StartVisualEffectArea::LoadXML @9fdfd0, StopVisualEffectArea::LoadXML @9fdb60 decomp
+    # CRpgStats_V2_Trigger_StartVisualEffectArea::LoadXML @9fdfd0 decomp, CRpgStats_V2_Trigger_StopVisualEffectArea::LoadXML @9fdb60 decomp
     0x856bafa8: 'VisualEffectUUID0',
     0x856bafa9: 'VisualEffectUUID1',
     0x856bafaa: 'VisualEffectUUID2',
