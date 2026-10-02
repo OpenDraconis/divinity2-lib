@@ -1164,6 +1164,37 @@ DIALOG_HITS: dict[int, str] = {
 }
 NAMES.update(DIALOG_HITS)
 
+#: Recovered 2026-09-26 by hashing every string of both executables, every literal and
+#: identifier of the decompilation, the Lua scripts and the documents, with and without an
+#: `m_` prefix, and by peeling up to three trailing characters off each hash
+#: (h = h * 33 + c inverted with 33⁻¹ mod 2³²). The numbered ones are built by their loader.
+RECOVERED_HITS: dict[int, str] = {
+    0x009bec1d: 'CWaterRenderer',       # watersettings.xml, the class of its fields
+    0x41be2340: 'm_fWaveSize',          # watersettings.xml
+    0x4b377326: 'm_fShininess',         # watersettings.xml
+    0x6cb60a44: 'm_vWaterColor',        # watersettings.xml
+    0x798608f6: 'm_fWaveSpeed',         # watersettings.xml
+    0x80817b75: 'm_bRenderDebug',       # watersettings.xml
+    0xa6cb3f7d: 'm_fFogModifier',       # watersettings.xml
+    0xaaf331b4: 'm_fWaveStrength',      # watersettings.xml
+    0xb44ed20b: 'm_fTexScale',          # watersettings.xml
+    0xb4beb967: 'm_fAlphaModifier',     # watersettings.xml
+    0xd06ee584: 'm_bDoUpdate',          # watersettings.xml
+    0xdef951d7: 'm_fSunStrength',       # watersettings.xml
+    0x647f7ac3: 'AlternateSpawnPoint0',  # CRpgStats_V2_Trigger_VisualEffectPoint::LoadXML @9fd510
+    0x647f7ac4: 'AlternateSpawnPoint1',  # "AlternateSpawnPoint" << i
+    0x647f7ac5: 'AlternateSpawnPoint2',
+    0x647f7ac6: 'AlternateSpawnPoint3',
+    0x647f7ac7: 'AlternateSpawnPoint4',
+    0x856bafa8: 'VisualEffectUUID0',    # CRpgStats_V2_Trigger_StartVisualEffectArea::LoadXML @9fdfd0,
+    0x856bafa9: 'VisualEffectUUID1',    # StopVisualEffectArea::LoadXML @9fdb60: "VisualEffectUUID" << i
+    0x856bafaa: 'VisualEffectUUID2',
+    0x14dd7eee: 'CustomAnimations',     # hash match only: root of customanimations.xml
+    0xedbbac6f: 'ExtraData1',           # hash match only: Localisation/*, consecutive with the next
+    0xedbbac70: 'ExtraData2',           # hash match only
+}
+NAMES.update(RECOVERED_HITS)
+
 
 def name_of(value: int) -> str | None:
     """The name behind a hash, or None if it was never recovered."""
