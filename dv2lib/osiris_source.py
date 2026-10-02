@@ -1,5 +1,3 @@
-"""Write a compiled Osiris story back as source the compiler accepts."""
-
 from __future__ import annotations
 
 import decimal
@@ -14,17 +12,12 @@ SECTION_HEADER = "//Osiris Header"
 SECTION_DEFINITIONS = "//Osiris Definitions"
 SECTION_GOALS = "//Osiris story code"
 
-#: function type id -> declaration keyword; the Osiris-defined kinds (4
-#: databases, 5 procedures) are defined by their rules, not declared.
 DECLARATION = {1: "event", 2: "query", 3: "call", 6: "sysquery", 7: "syscall"}
 
-#: What the compiler stores for `Goal(N).SubGoals(AND)`: measured by
-#: compiling Episode 1's source and reading the goals back, AND is 1.
 COMBINATION = {1: "AND", 0: "OR"}
 
 
 def real(x: float) -> str:
-    """The shortest decimal that reads back as the same float32."""
     s = "0.0"
     for p in range(1, 10):
         s = f"{x:.{p}g}"
@@ -39,13 +32,11 @@ def real(x: float) -> str:
 
 @dataclass
 class Tuple:
-    """A node's columns: by logical index, and in physical order."""
     logical: dict = field(default_factory=dict)
     physical: list = field(default_factory=list)
 
 
 def adapt(adapter: Adapter, columns: Tuple) -> Tuple:
-    """The parent's columns from the child's."""
     out = Tuple()
     constants = dict(adapter.constants)
     for i, index in enumerate(adapter.logical_indices):
@@ -76,7 +67,6 @@ class Decompiler:
         self.user_procs = {f.name for f in story.functions if f.type_id == 5}
         self.signatures = {f.name: f.params for f in story.functions}
 
-    # ------------------------------------------------------------ values
 
     def literal(self, v: Value) -> str:
         t = v.type_id
@@ -88,14 +78,13 @@ class Decompiler:
             return f'"{v.value}"'
         if t == 0 or v.value is None:
             return "_"
-        return str(v.value)                      # an object, by identifier
+        return str(v.value)
 
     def typed(self, v: Value, name: str, column: int = 0) -> str:
         t = self.types.get(v.type_id or column)
         return f"({t}){name}" if t and (v.type_id or column) else name
 
     def argument(self, v: Value, bound: set, annotate: bool, column: int) -> str:
-        """One condition argument."""
         if v.is_variable:
             if v.unused or not v.name:
                 return self.typed(v, "_", column) if annotate else "_"
@@ -125,7 +114,6 @@ class Decompiler:
         s = f"{c.name}({args});"
         return "NOT " + s if c.negate else s
 
-    # -------------------------------------------------------- conditions
 
     def leftmost(self, node: Node) -> Node:
         while True:
@@ -140,8 +128,6 @@ class Decompiler:
     def condition(self, node: Node, columns: Tuple, bound: set) -> str:
         annotate = node.type_id in (1, 2)
         signature = self.signatures.get(node.name, [])
-        # A story saved by the running game pads every adapter to five
-        # columns; the node's arity says how many are real.
         physical = columns.physical[:node.n_params] if node.n_params else columns.physical
         args = ", ".join(self.argument(v, bound, annotate,
                                        signature[i] if i < len(signature) else 0)
@@ -149,7 +135,6 @@ class Decompiler:
         return f"{node.name}({args})"
 
     def conditions(self, node: Node, columns: Tuple, bound: set) -> list:
-        """The condition lines above `node`, given its columns."""
         t = node.type_id
         f = node.fields
         if t in (1, 2, 3, 8):
@@ -193,7 +178,6 @@ class Decompiler:
         lines += [self.call(c, variables) for c in r.fields["calls"]]
         return lines
 
-    # ------------------------------------------------------------- goals
 
     def goal_title(self, g) -> str:
         return f'Goal({g.index}).Title("{g.name}");'
@@ -211,7 +195,6 @@ class Decompiler:
         return out
 
     def goal_tree(self, g) -> list:
-        """The tree lines, after every body: children and the combination."""
         out = [f"Goal({g.index}).SubGoal({c});" for c in g.children]
         out.append(f"Goal({g.index}).SubGoals({COMBINATION.get(g.combination, 'OR')});")
         return out
@@ -219,7 +202,6 @@ class Decompiler:
     def goal(self, g) -> str:
         return "\n".join([self.goal_title(g)] + self.goal_body(g)) + "\n"
 
-    # ------------------------------------------------------------ header
 
     def declaration(self, f) -> str:
         kw = DECLARATION[f.type_id]
@@ -232,7 +214,6 @@ class Decompiler:
         return f"{kw} {f.name}({','.join(params)}) ({','.join(str(k) for k in f.key)})"
 
     def version(self) -> str:
-        """The header's version string"""
         return self.st.header.version_block.split(b"\0", 1)[0].decode("latin-1")
 
     def header(self) -> list:

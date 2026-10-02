@@ -1,5 +1,3 @@
-"""The `.dv2` archive: a directory of paths, then each file stored raw or zlib-compressed."""
-
 from __future__ import annotations
 
 import struct
@@ -15,28 +13,19 @@ DIR_ENTRY_SIZE = 12
 
 
 class ArchiveError(Dv2Error):
-    """Malformed archive, or a structural assumption did not hold."""
+    pass
 
 
 class UnsupportedVersion(ArchiveError):
-    """Archive version we deliberately refuse to parse."""
+    pass
 
 
 @dataclass(frozen=True)
 class Entry:
-    """One file inside an archive."""
-
     path: str
-    """Original path, backslash-separated, relative to the game data dir."""
-
     offset: int
-    """Offset RELATIVE to Header.data_start. Add data_start for a file seek."""
-
     packed_size: int
-    """Size of the bytes as stored in the archive."""
-
     unpacked_size: int
-    """Size after decompression. Zero means the entry is stored raw."""
 
     @property
     def is_compressed(self) -> bool:
@@ -49,17 +38,15 @@ class Entry:
 @dataclass(frozen=True)
 class Header:
     version: int
-    unknown_a: int  # V5 only. Always 1 across all 533 shipped archives.
-    unknown_b: int  # V5 only. Always 4 across all 533 shipped archives.
-    align_32k: int  # 0 -> data_start is 32K-aligned; 1 -> packed tight.
-    unknown_d: int  # Always 1 across all 533 shipped archives.
+    unknown_a: int
+    unknown_b: int
+    align_32k: int
+    unknown_d: int
     data_start: int
     string_space: int
 
 
 class Archive:
-    """Reader for a `.dv2` container."""
-
     def __init__(self, path: Path | str) -> None:
         self.path = Path(path)
         self._fh: BinaryIO = self.path.open("rb")
@@ -111,7 +98,6 @@ class Archive:
         blob = self._fh.read(self.header.string_space)
         if len(blob) != self.header.string_space:
             raise ArchiveError(f"{self.path}: truncated string table")
-        # Trailing NUL produces an empty final element; drop empties.
         names = [n.decode("latin-1") for n in blob.split(b"\0") if n]
 
         raw = self._fh.read(4)
@@ -137,7 +123,6 @@ class Archive:
         return entries
 
     def read(self, entry: Entry) -> bytes:
-        """Return an entry's decompressed content."""
         self._fh.seek(self.header.data_start + entry.offset)
         raw = self._fh.read(entry.packed_size)
         if len(raw) != entry.packed_size:
@@ -160,18 +145,16 @@ class Archive:
 
 
 def safe_destination(outdir: Path, posix_path: str) -> Path:
-    """Resolve an archive path to a path inside outdir, refusing traversal."""
     dest = (outdir / posix_path).resolve()
     if not dest.is_relative_to(outdir.resolve()):
         raise ArchiveError(f"{posix_path}: path escapes the output directory")
     return dest
 
 
-ALIGNMENT = 32768   # uncompressed entries sit on this boundary; believed texture streaming
+ALIGNMENT = 32768
 
 
 def check_invariants(archive: Archive) -> list[str]:
-    """Return a list of violated structural expectations."""
     problems: list[str] = []
     h = archive.header
 
@@ -182,7 +165,6 @@ def check_invariants(archive: Archive) -> list[str]:
     if h.unknown_d != 1:
         problems.append(f"unknown_d={h.unknown_d}, expected 1 (spec §1.4)")
 
-    # The headline finding: align_32k predicts data_start alignment exactly.
     aligned = h.data_start % ALIGNMENT == 0
     if h.align_32k == 0 and not aligned:
         problems.append(f"align_32k=0 but data_start={h.data_start} is not 32K-aligned")

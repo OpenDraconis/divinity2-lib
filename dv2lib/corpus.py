@@ -1,21 +1,3 @@
-r"""Which archive serves each path: the engine's search order.
-
-The executable names 31 global archives under `Data/Win32/Packed/`, and the
-order it names them in is the search order:
-
-    grep -a -o 'Win32\\Packed\\[ -~]*\.dv2' <game>/bin/Divinity2-debug.exe
-
-`CSoundBankManager::Init` @86d860 mounts one more, `Soundbanks.dv2`, before it
-loads `Init.bnk`; the executable spells it `"Win32"` + `"\\Packed\\Soundbanks.dv2"`,
-so the grep above misses it. It is searched after the 31; of its 223 paths one
-is in another archive, byte-identical (`RS_BV2_Main.bnk`, `Episode_1_Extended/Dialogs.dv2`).
-
-512 more archives sit under `World/<Region>/...` and `Episode_*/` and are
-searched after those. Among them no XML path appears twice with different
-content, so they are sorted by path. The first archive that holds a path
-serves it -- per path, not per archive: `Patch.dv2` overrides region files,
-and 1,824 of the 35,079 paths are in more than one archive.
-"""
 from __future__ import annotations
 
 from collections.abc import Callable, Iterable
@@ -24,7 +6,6 @@ from pathlib import Path
 
 from . import archive
 
-#: Search order, highest priority first.
 LOAD_ORDER: tuple[str, ...] = (
     "DKS_Patch.dv2", "DKS_Patch_2.dv2", "DKS_Patch_3.dv2", "DKS_Patch_4.dv2",
     "FOV_Patch.dv2", "FOV_Patch_2.dv2", "FOV_Patch_3.dv2", "FOV_Patch_4.dv2",
@@ -38,20 +19,15 @@ LOAD_ORDER: tuple[str, ...] = (
     "Characters.dv2", "CharacterTemplates.dv2", "Trees.dv2",
 )
 
-#: Slots the executable names but the game does not ship: eleven of the twelve
-#: override archives are empty, `Patch.dv2` is Larian's. What sits in them is a
-#: mod, and a mod is not the game.
 MOD_SLOTS: tuple[str, ...] = tuple(n for n in LOAD_ORDER[:12] if n != "Patch.dv2")
 
-#: The sound archive, mounted by `CSoundBankManager::Init` @86d860.
+# CSoundBankManager::Init @86d860 decomp
 SOUNDBANKS = "Soundbanks.dv2"
 
 
 @dataclass(frozen=True)
 class Entry:
-    """One file the game would load, and the archive it comes from."""
-
-    path: str                 # as the archive spells it, with backslashes
+    path: str
     archive: Path
     entry: archive.Entry
 
@@ -61,11 +37,6 @@ class Entry:
 
 
 def archives(packed: Path, *, shipped: bool = True) -> list[Path]:
-    """Every archive the game consults, best first.
-
-    `shipped` leaves out the mod slots, so the answer is the game as Larian shipped it;
-    without it an installed mod wins its paths the way the engine lets it.
-    """
     out = [packed / n for n in LOAD_ORDER
            if (packed / n).exists() and not (shipped and n in MOD_SLOTS)]
     out += [packed / SOUNDBANKS] if (packed / SOUNDBANKS).exists() else []
@@ -73,15 +44,10 @@ def archives(packed: Path, *, shipped: bool = True) -> list[Path]:
     return out
 
 
-#: The last index per (packed, shipped), with the archive list it was read from.
 _index_cache: dict[tuple[str, bool], tuple[tuple, dict[str, Entry]]] = {}
 
 
 def stamp(files: list[Path]) -> tuple:
-    """What makes a cached read stale: an archive added, removed, or written.
-
-    Every cache over the packed data keys on this, so they all go stale together.
-    """
     out = []
     for p in files:
         try:
@@ -93,7 +59,6 @@ def stamp(files: list[Path]) -> tuple:
 
 
 def _all(packed: Path, shipped: bool) -> dict[str, Entry]:
-    """Every entry of every archive, read once and kept until an archive changes."""
     ck = (str(packed), shipped)
     files = archives(packed, shipped=shipped)
     st = stamp(files)
@@ -111,11 +76,6 @@ def _all(packed: Path, shipped: bool) -> dict[str, Entry]:
 
 def index(packed: Path, want: Callable[[str], bool] | None = None, *,
           shipped: bool = True) -> dict[str, Entry]:
-    """Lower-cased path -> the entry the game would load.
-
-    Reading 500 archive directories costs more than everything a caller does with the
-    answer, and every caller wants a subset of the same thing, so the whole index is
-    read once and filtered in memory."""
     full = _all(Path(packed), shipped)
     if want is None:
         return dict(full)
@@ -128,7 +88,6 @@ def read(entry: Entry) -> bytes:
 
 
 def read_many(entries: Iterable[Entry]) -> dict[str, bytes]:
-    """key -> bytes, opening each archive once."""
     by_archive: dict[Path, list[Entry]] = {}
     for e in entries:
         by_archive.setdefault(e.archive, []).append(e)
@@ -141,7 +100,6 @@ def read_many(entries: Iterable[Entry]) -> dict[str, bytes]:
 
 
 def find(packed: Path, suffix: str, *, shipped: bool = True) -> Entry:
-    """The winning entry whose path ends with `suffix`, case-insensitive."""
     suffix = suffix.lower()
     hits = index(packed, lambda k: k.endswith(suffix), shipped=shipped)
     if not hits:
@@ -152,7 +110,6 @@ def find(packed: Path, suffix: str, *, shipped: bool = True) -> Entry:
 
 
 def owners(packed: Path, paths: Iterable[str]) -> dict[str, str]:
-    """Lower-cased path -> the name of the archive that wins it, mod slots included."""
     wanted = {p.lower() for p in paths}
     hits = index(packed, lambda k: k in wanted, shipped=False)
     return {k: e.archive.name for k, e in hits.items()}

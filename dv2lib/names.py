@@ -1,8 +1,5 @@
-"""Element and attribute names for Larian's binary XML, by their hash."""
-
 from __future__ import annotations
 
-#: hash -> name. 1078 of 1184 hashes used in the corpus.
 NAMES: dict[int, str] = {
     0x0000007a: 'z',
     0x00000079: 'y',
@@ -1090,112 +1087,128 @@ CANDIDATE_HITS: dict[int, str] = {
     0xc1b82948: 'Param7', 0xc1b82949: 'Param8', 0xc1b8294a: 'Param9',
     0xf8bd51b2: 'Param10', 0xf8bd51b3: 'Param11', 0xf8bd51b4: 'Param12',
     0xf8bd51b5: 'Param13',
-    0x77e1a90d: 'statrequirement',      # item/statrequirements/statrequirement
-    0x6c978753: 'transformer',          # item/transformers/transformer
-    0x17a5e462: 'modifiers',            # item/transformers/transformer/modifiers/Modifier
-    0x078846cd: 'group',                # treasure/groups/group, itemtypegroups/group
-    0xbbf2fbb1: 'itemtype',             # group/itemtypes/itemtype
-    0x2ca69f78: 'prototypeslot',        # inventory/prototypeslots/prototypeslot
-    0xa3a46677: 'DefaultSkills',        # the root of defaultskills.xml
-    0x65632d3e: 'StatType',             # rpgstats_values.xml
+    0x77e1a90d: 'statrequirement',
+    0x6c978753: 'transformer',
+    0x17a5e462: 'modifiers',
+    0x078846cd: 'group',
+    0xbbf2fbb1: 'itemtype',
+    0x2ca69f78: 'prototypeslot',
+    0xa3a46677: 'DefaultSkills',
+    0x65632d3e: 'StatType',
     0xe47022c2: 'SpecialParameter',
     0xa2b1cb07: 'SkillSchool',
     0x1a3f2441: 'SkillType',
     0xf0b4e02f: 'EffectType',
-    0x38ce4904: 'TableList',            # uniqueness/Unique/TableList/Table
-    0x000009ad: 'ID',                   # encounters: Area.ID, Encounter.ID
-    0x56ffbc14: 'EncounterName',        # characterprototypenames
-    0x64106ceb: 'IsGenerated',          # item, always 0 in the shipped data
+    0x38ce4904: 'TableList',
+    0x000009ad: 'ID',
+    0x56ffbc14: 'EncounterName',
+    0x64106ceb: 'IsGenerated',
     0x00000ded: 'id',
 }
 NAMES.update(CANDIDATE_HITS)
 
-#: Recovered 2026-09 by hashing every identifier in `Divinity2GUP.exe`, `Divinity2G.pdb`
-#: and `Divinity2GUP.pdb` (1.94 million) against the hashes the corpus uses. Where a hash
-#: has several names (binxml.md, "Hashes two names share") the one the element's place makes
-#: sensible; the rest name the engine function that asks for them. Eleven are asked for by
-#: a loader and carried by no shipped file.
 PDB_HITS: dict[int, str] = {
-    0x57f943fd: 'ClassicFogColor',      # CAtmosphere::LoadXML, not in the corpus
-    0x353309f9: 'fClassicFogDepth',     # CAtmosphere::LoadXML, not in the corpus
-    0x5dbfc55f: 'fPPBrightness',        # CAtmosphere::LoadXML, not in the corpus
-    0x0be6afd4: 'fPPContrast',          # CSky::LoadXML, not in the corpus
-    0xf3c2f888: 'fPPHue',               # CSky::LoadXML, not in the corpus
-    0x58b27f30: 'fPPSaturation',        # CSky::LoadXML, not in the corpus
-    0x3e78e416: 'fCloudBrightness',     # CCloudDome::LoadXML, not in the corpus
-    0x5feffbbd: 'fCloudDensity',        # CCloudDome::LoadXML, not in the corpus
-    0xc9490f45: 'ShadowColor',          # CCloudDome::LoadXML, not in the corpus
-    0xc06bbab6: 'CloudColor',           # CCloudColorSetting::GetName, not in the corpus
-    0x41d8ccba: 'fSplitWeight',         # CCascadedShadowMap::SaveXML, not in the corpus
-    0x00000a18: 'Km',                   # CSky::LoadXML; also LL
-    0x00000a1d: 'Kr',                   # CSky::LoadXML; also LQ, M0
-    0x0001f777: 'sky',                  # CAtmosphere::LoadXML; also tL7
-    0x00017096: 'Sun',                  # CLightManager::LoadXML; also TUM
-    0x0001f8aa: 'sub',                  # CTerrainPatchDataManager::LoadXML; also tUA
-    0x00000ba8: 'XP',                   # CRpgStats_V2_CharacterState::LoadXML; also Wq
-    0x0001dda4: 'min',                  # beside max in ItemDescriptors.xml; also mjM
-    0x0001547e: 'Map',                  # coordinates.xml; also NB.
-    0x24771d7b: 'gamelogic_init',       # CGameLogic_Init::LoadXML
-    0xa024030b: 'GamePadSensitivityHumanPitch',   # GameControlSettings::LoadXML
-    0xb0ed2324: 'GamePadSensitivityHumanYaw',     # GameControlSettings::LoadXML
-    0xb8d1b0f5: 'HumanMinPitch',        # GameControlSettings::LoadXML
-    0x8bd578bc: 'InvertFlyY',           # gamecontrolsettings.xml
-    0xfc836a31: 'InvertY',              # gamecontrolsettings.xml
-    0xd731ac19: 'm_uiNumberOfMaps',     # shadowsettings.xml
-    0xe4ad9e4e: 'm_uiUpdateMethod',     # shadowsettings.xml
-    0x634f7b23: 'accordingy',           # rpgstats_values.xml, spelled so
-    0x3f4c41d5: 'Crystals',             # rpgstats_flyingfortresscrystalprototypes.xml
-    0xb2c8be8b: 'silvereyes',           # rpgstats_player_customization.xml
+    # CAtmosphere::LoadXML decomp
+    0x57f943fd: 'ClassicFogColor',
+    # CAtmosphere::LoadXML decomp
+    0x353309f9: 'fClassicFogDepth',
+    # CAtmosphere::LoadXML decomp
+    0x5dbfc55f: 'fPPBrightness',
+    # CSky::LoadXML decomp
+    0x0be6afd4: 'fPPContrast',
+    # CSky::LoadXML decomp
+    0xf3c2f888: 'fPPHue',
+    # CSky::LoadXML decomp
+    0x58b27f30: 'fPPSaturation',
+    # CCloudDome::LoadXML decomp
+    0x3e78e416: 'fCloudBrightness',
+    # CCloudDome::LoadXML decomp
+    0x5feffbbd: 'fCloudDensity',
+    # CCloudDome::LoadXML decomp
+    0xc9490f45: 'ShadowColor',
+    # CCloudColorSetting::GetName decomp
+    0xc06bbab6: 'CloudColor',
+    # CCascadedShadowMap::SaveXML decomp
+    0x41d8ccba: 'fSplitWeight',
+    # CSky::LoadXML decomp
+    0x00000a18: 'Km',
+    # CSky::LoadXML decomp
+    0x00000a1d: 'Kr',
+    # CAtmosphere::LoadXML decomp
+    0x0001f777: 'sky',
+    # CLightManager::LoadXML decomp
+    0x00017096: 'Sun',
+    # CTerrainPatchDataManager::LoadXML decomp
+    0x0001f8aa: 'sub',
+    # CRpgStats_V2_CharacterState::LoadXML decomp
+    0x00000ba8: 'XP',
+    0x0001dda4: 'min',
+    0x0001547e: 'Map',
+    # CGameLogic_Init::LoadXML decomp
+    0x24771d7b: 'gamelogic_init',
+    # GameControlSettings::LoadXML decomp
+    0xa024030b: 'GamePadSensitivityHumanPitch',
+    # GameControlSettings::LoadXML decomp
+    0xb0ed2324: 'GamePadSensitivityHumanYaw',
+    # GameControlSettings::LoadXML decomp
+    0xb8d1b0f5: 'HumanMinPitch',
+    0x8bd578bc: 'InvertFlyY',
+    0xfc836a31: 'InvertY',
+    0xd731ac19: 'm_uiNumberOfMaps',
+    0xe4ad9e4e: 'm_uiUpdateMethod',
+    0x634f7b23: 'accordingy',
+    0x3f4c41d5: 'Crystals',
+    0xb2c8be8b: 'silvereyes',
 }
 NAMES.update(PDB_HITS)
 
-#: Recovered 2026-09-17 from the dialog loader (native measurement: dialog-graph.md 1.3): the
-#: names it compares, confirmed by the hash. The two track elements it walks by position, so
-#: theirs are hash matches only; the element above them (`#00011d68`) is still open.
 DIALOG_HITS: dict[int, str] = {
-    0x002f4c9e: 'Shot',                 # CGameDialogIO_V20::ReadXML @ad9760
-    0x83197f53: 'CueSpanish',           # CBaseNode::GetLanguageCueTag @a22460: "Cue" + language
-    0x8aa6a73f: 'CueItalian',           # CBaseNode::GetLanguageCueTag @a22460
-    0x4c8df8f0: 'xsi:type',             # CNodeV20::ProcessAnimationData @a271c0, ProcessCameraData @a25f20
-    0x00000df6: 'im',                   # CNodeV20::ProcessCameraData @a25f20
-    0x0001c126: 'fsm',                  # CNodeV20::ProcessCameraData @a25f20
-    0xc4929e48: 'AnimationTracks',      # hash match only: walked by position (a271dd)
-    0xa11bb735: 'AnimationTrack',       # hash match only: walked by position (a273a9)
+    # CGameDialogIO_V20::ReadXML @ad9760 decomp
+    0x002f4c9e: 'Shot',
+    # CBaseNode::GetLanguageCueTag @a22460 decomp
+    0x83197f53: 'CueSpanish',
+    # CBaseNode::GetLanguageCueTag @a22460 decomp
+    0x8aa6a73f: 'CueItalian',
+    # CNodeV20::ProcessAnimationData @a271c0, ProcessCameraData @a25f20 decomp
+    0x4c8df8f0: 'xsi:type',
+    # CNodeV20::ProcessCameraData @a25f20 decomp
+    0x00000df6: 'im',
+    # CNodeV20::ProcessCameraData @a25f20 decomp
+    0x0001c126: 'fsm',
+    0xc4929e48: 'AnimationTracks',
+    0xa11bb735: 'AnimationTrack',
 }
 NAMES.update(DIALOG_HITS)
 
-#: Recovered 2026-09-26 by hashing every string of both executables, every literal and
-#: identifier of the decompilation, the Lua scripts and the documents, with and without an
-#: `m_` prefix, and by peeling up to three trailing characters off each hash
-#: (h = h * 33 + c inverted with 33⁻¹ mod 2³²). The numbered ones are built by their loader.
 RECOVERED_HITS: dict[int, str] = {
-    0x009bec1d: 'CWaterRenderer',       # watersettings.xml, the class of its fields
-    0x41be2340: 'm_fWaveSize',          # watersettings.xml
-    0x4b377326: 'm_fShininess',         # watersettings.xml
-    0x6cb60a44: 'm_vWaterColor',        # watersettings.xml
-    0x798608f6: 'm_fWaveSpeed',         # watersettings.xml
-    0x80817b75: 'm_bRenderDebug',       # watersettings.xml
-    0xa6cb3f7d: 'm_fFogModifier',       # watersettings.xml
-    0xaaf331b4: 'm_fWaveStrength',      # watersettings.xml
-    0xb44ed20b: 'm_fTexScale',          # watersettings.xml
-    0xb4beb967: 'm_fAlphaModifier',     # watersettings.xml
-    0xd06ee584: 'm_bDoUpdate',          # watersettings.xml
-    0xdef951d7: 'm_fSunStrength',       # watersettings.xml
-    0x647f7ac3: 'AlternateSpawnPoint0',  # CRpgStats_V2_Trigger_VisualEffectPoint::LoadXML @9fd510
-    0x647f7ac4: 'AlternateSpawnPoint1',  # "AlternateSpawnPoint" << i
+    0x009bec1d: 'CWaterRenderer',
+    0x41be2340: 'm_fWaveSize',
+    0x4b377326: 'm_fShininess',
+    0x6cb60a44: 'm_vWaterColor',
+    0x798608f6: 'm_fWaveSpeed',
+    0x80817b75: 'm_bRenderDebug',
+    0xa6cb3f7d: 'm_fFogModifier',
+    0xaaf331b4: 'm_fWaveStrength',
+    0xb44ed20b: 'm_fTexScale',
+    0xb4beb967: 'm_fAlphaModifier',
+    0xd06ee584: 'm_bDoUpdate',
+    0xdef951d7: 'm_fSunStrength',
+    # CRpgStats_V2_Trigger_VisualEffectPoint::LoadXML @9fd510 decomp
+    0x647f7ac3: 'AlternateSpawnPoint0',
+    0x647f7ac4: 'AlternateSpawnPoint1',
     0x647f7ac5: 'AlternateSpawnPoint2',
     0x647f7ac6: 'AlternateSpawnPoint3',
     0x647f7ac7: 'AlternateSpawnPoint4',
-    0x856bafa8: 'VisualEffectUUID0',    # CRpgStats_V2_Trigger_StartVisualEffectArea::LoadXML @9fdfd0,
-    0x856bafa9: 'VisualEffectUUID1',    # StopVisualEffectArea::LoadXML @9fdb60: "VisualEffectUUID" << i
+    # CRpgStats_V2_Trigger_StartVisualEffectArea::LoadXML @9fdfd0, StopVisualEffectArea::LoadXML @9fdb60 decomp
+    0x856bafa8: 'VisualEffectUUID0',
+    0x856bafa9: 'VisualEffectUUID1',
     0x856bafaa: 'VisualEffectUUID2',
-    0x14dd7eee: 'CustomAnimations',     # hash match only: root of customanimations.xml
-    0xedbbac6f: 'ExtraData1',           # hash match only: Localisation/*, consecutive with the next
-    0xedbbac70: 'ExtraData2',           # hash match only
+    0x14dd7eee: 'CustomAnimations',
+    0xedbbac6f: 'ExtraData1',
+    0xedbbac70: 'ExtraData2',
 }
 NAMES.update(RECOVERED_HITS)
 
 
 def name_of(value: int) -> str | None:
-    """The name behind a hash, or None if it was never recovered."""
     return NAMES.get(value)

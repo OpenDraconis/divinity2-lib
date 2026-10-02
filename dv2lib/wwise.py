@@ -1,32 +1,3 @@
-"""Wwise sound banks (`.bnk`, bank generator versions 44 and 48): the media, the objects, the names.
-
-A bank is a row of chunks, each a four-byte tag and a 32-bit size. `BKHD` is the header,
-`DIDX` indexes the media that `DATA` holds, `HIRC` holds the objects (sounds, containers,
-actions, events), `STID` names banks. Every other chunk (`STMG`, `FXPR`, `ENVS`, only in
-`Init.bnk`) is kept as its bytes; `STMG`'s leading field, the volume threshold below which a
-voice is under Wwise's below-threshold behaviour, is also decoded (`Bank.volume_threshold_db`):
-`CAkBankMgr::ProcessGlobalSettingsChunk` @dbebb0 reads it first, in dB, and passes it to
-`AK::SoundEngine::SetVolumeThresholdInternal` @d8b510 at priority 2 (bank data), which nothing
-in the game overrides (`SetVolumeThreshold` @d8c970 is never called outside that one path).
-Measured, `Init.bnk`'s is -96.3, `SetVolumeThresholdInternal`'s own valid range's low end.
-
-The readers are the engine's own, from `Divinity2GUP.pdb`: `CAkBankMgr::ProcessBankHeader`
-@dbb7b0, `CAkBankMgr::LoadMediaIndex` @dbbc30, `CAkBankMgr::LoadSource` @dbc790,
-`CAkParameterNodeBase::SetNodeBaseParams` @e07ef0 and what it calls, `CAkSound`,
-`CAkRanSeqCntr`, `CAkActorMixer`, `CAkLayerCntr`, `CAkEvent`, `CAkAction*` and
-`CAkAttenuation::SetInitialValues`. That build reads version 44 (`ProcessBankHeader`
-refuses any other); the Developer's Cut ships 1411 banks of 48 and 12 of 44. The two
-differences in the objects read here are wwiser's (github.com/bnnm/wwiser, `wparser.py`):
-from 47 a source has no `AkAudioFormat`, and every effect ends with a list of bank data.
-Measured: every object of all 1423 shipped banks is read to exactly its section size
-(`read` raises otherwise). A Play action's file ID follows its sub-section, not inside it.
-
-Names come from `HIRCType`, `AkActionType`, `AkCurveInterpolation`, `AkCurveScaling`,
-`AkRTPC_ParameterID`, `AkPositioningType` and `AkPathMode` in the same PDB.
-An event is found by `id_of(name)`, the hash of `AK::SoundEngine::GetIDFromString` @98cc60:
-the name lower-cased (@d8ae00), then FNV-1 32 (@d8cba0).
-"""
-
 from __future__ import annotations
 
 import struct
@@ -87,7 +58,6 @@ class WwiseError(Dv2Error):
 
 
 def id_of(name: str) -> int:
-    """The 32-bit ID Wwise gives a name: FNV-1 over its bytes, A-Z lower-cased and nothing else."""
     h = 0x811C9DC5
     for c in codec.encode(name):
         h = ((h * 0x01000193) & 0xFFFFFFFF) ^ (c + 32 if 65 <= c <= 90 else c)
@@ -140,7 +110,6 @@ class _Reader:
 
 
 def read(data: bytes) -> Bank:
-    """A whole bank. Raises `WwiseError` on another version or an object not read to its size."""
     r = _Reader(data)
     tag, size = r.raw(4), r.u32()
     if tag != b"BKHD":
@@ -193,8 +162,8 @@ def _object(r: _Reader, bank: Bank) -> dict:
     return obj
 
 
+# CAkBankMgr::LoadSource @dbc790 decomp
 def _source(r: _Reader, version: int) -> dict:
-    """`CAkBankMgr::LoadSource` @dbc790; its `AkAudioFormat` is gone from 47 (wwiser)."""
     plugin, stream = r.u32(), r.u32()
     s = {"plugin": plugin, "stream": SOURCE_TYPES.get(stream, stream)}
     if version <= 46:
@@ -211,13 +180,8 @@ def _source(r: _Reader, version: int) -> dict:
 COMPRESSOR_FX, PEAK_LIMITER_FX = 0x6C0003, 0x6E0003
 
 
+# CAkCompressorFXParams::SetParamsBlock @d94ec0, CAkPeakLimiterFXParams::SetParamsBlock @d93f70 decomp
 def _fx_params(kind: int, raw: bytes) -> dict | None:
-    """The Wwise Compressor's and Peak Limiter's own params block, both 22 bytes, plugin IDs
-    `COMPRESSOR_FX`/`PEAK_LIMITER_FX` (`AkPluginType_id`, the low 16 bits of `fx`):
-    `CAkCompressorFXParams::SetParamsBlock` @d94ec0, `CAkPeakLimiterFXParams::SetParamsBlock`
-    @d93f70 read threshold, ratio, attack (compressor) or look-ahead (limiter), release, an output
-    gain in dB (raised to linear by the engine, `10**(dB/20)`, at load, not read here), then
-    `bProcessLFE` and `bChannelLink`."""
     if kind not in (COMPRESSOR_FX, PEAK_LIMITER_FX) or len(raw) < 22:
         return None
     threshold, ratio, third, release, output_gain_db = struct.unpack_from("<5f", raw)
@@ -227,10 +191,8 @@ def _fx_params(kind: int, raw: bytes) -> dict | None:
     return p
 
 
+# CAkParameterNodeBase::SetNodeBaseParams @e07ef0 decomp
 def _fx_list(r: _Reader, bank: Bank, count: int) -> list[dict]:
-    """The per-effect list `CAkParameterNodeBase::SetNodeBaseParams` @e07ef0 and `CAkBus::
-    SetInitialFxParams` (wwiser's `CAkBus__SetInitialFxParams`, called `#046>=`: absent below that
-    version) share."""
     fx = []
     for _ in range(count):
         e = {"index": r.u8(), "fx": r.u32(), "rendered": r.u8() != 0}
@@ -244,8 +206,8 @@ def _fx_list(r: _Reader, bank: Bank, count: int) -> list[dict]:
     return fx
 
 
+# CAkParameterNodeBase::SetNodeBaseParams @e07ef0 decomp
 def _node_base(r: _Reader, bank: Bank) -> dict:
-    """`CAkParameterNodeBase::SetNodeBaseParams` @e07ef0 and the readers it calls in order."""
     n = {"override_fx": r.u8() != 0, "fx": []}
     count = r.u8()
     if count:
@@ -272,8 +234,8 @@ def _node_base(r: _Reader, bank: Bank) -> dict:
     return n
 
 
+# CAkParameterNode::SetPositioningParams @e03010 decomp
 def _positioning(r: _Reader) -> dict | None:
-    """`CAkParameterNode::SetPositioningParams` @e03010."""
     if not r.u8():
         return None
     p = {"center_pct": r.u32(), "pan_rl": r.f32(), "pan_fr": r.f32()}
@@ -295,12 +257,8 @@ def _positioning(r: _Reader) -> dict | None:
     return p
 
 
+# CAkParameterNodeBase::SetInitialRTPC @e06d80 decomp
 def _rtpcs(r: _Reader) -> list[dict]:
-    """`CAkParameterNodeBase::SetInitialRTPC` @e06d80: 20 bytes, then 12 per point.
-
-    The RTPC's ID is the u32 at +5: `CAkAttenuation::SetInitialValues` @e00390 passes that
-    one, with the parameter, curve and scaling after it, to its two-argument-shorter `SetRTPC`.
-    """
     out = []
     for _ in range(r.u16()):
         fx, fx_rendered, rtpc, param, curve, scaling, n = r.take("IBIIIBH")
@@ -310,20 +268,20 @@ def _rtpcs(r: _Reader) -> list[dict]:
     return out
 
 
+# CAkParentNode<CAkParameterNode>::SetChildren @dfa440 decomp
 def _children(r: _Reader) -> list[int]:
-    """`CAkParentNode<CAkParameterNode>::SetChildren` @dfa440."""
     return [r.u32() for _ in range(r.u32())]
 
 
+# CAkSound::SetInitialValues @df9740 decomp
 def _sound(r, o, bank):
-    """`CAkSound::SetInitialValues` @df9740."""
     o["source"] = _source(r, bank.version)
     o["node"] = _node_base(r, bank)
     o["loop"], o["loop_min"], o["loop_max"] = r.take("3h")
 
 
+# CAkRanSeqCntr::SetInitialValues @dfc230 decomp
 def _ranseq(r, o, bank):
-    """`CAkRanSeqCntr::SetInitialValues` @dfc230; the byte after the mode is not read there."""
     o["node"] = _node_base(r, bank)
     o["loop"] = r.u16()
     o["transition"], o["transition_min"], o["transition_max"] = r.take("3f")
@@ -336,14 +294,14 @@ def _ranseq(r, o, bank):
     o["playlist"] = [{"id": r.u32(), "weight": r.u8()} for _ in range(r.u16())]
 
 
+# CAkActorMixer::SetInitialValues @dffba0 decomp
 def _actor_mixer(r, o, bank):
-    """`CAkActorMixer::SetInitialValues` @dffba0."""
     o["node"] = _node_base(r, bank)
     o["children"] = _children(r)
 
 
+# CAkLayerCntr::SetInitialValues @dff6f0, CAkLayer::SetInitialValues @e092c0 decomp
 def _layer_cntr(r, o, bank):
-    """`CAkLayerCntr::SetInitialValues` @dff6f0 and `CAkLayer::SetInitialValues` @e092c0."""
     o["node"] = _node_base(r, bank)
     o["children"] = _children(r)
     o["layers"] = []
@@ -353,18 +311,18 @@ def _layer_cntr(r, o, bank):
         o["layers"].append(layer)
 
 
+# CAkEvent::SetInitialValues @df9170 decomp
 def _event(r, o, bank):
-    """`CAkEvent::SetInitialValues` @df9170."""
     o["actions"] = [r.u32() for _ in range(r.u32())]
 
 
+# CAkActionExcept::SetExceptParams @e209e0 decomp
 def _except(r) -> list[int]:
-    """`CAkActionExcept::SetExceptParams` @e209e0."""
     return [r.u32() for _ in range(r.u32())]
 
 
+# CAkAction::SetInitialValues @df2b00 decomp
 def _action(r, o, bank):
-    """`CAkAction::SetInitialValues` @df2b00, then the class's `SetActionParams`."""
     kind = r.u32()
     o["action"] = ACTION_TYPES.get(kind, kind)
     o["target"] = r.u32()
@@ -398,8 +356,8 @@ def _action(r, o, bank):
         o["file"] = r.u32()
 
 
+# CAkAttenuation::SetInitialValues @e00390 decomp
 def _attenuation(r, o, bank):
-    """`CAkAttenuation::SetInitialValues` @e00390."""
     if r.u8():
         o["cone"] = {"inside_deg": r.f32(), "outside_deg": r.f32(), "outside_volume": r.f32(),
                      "lowpass": r.f32()}
@@ -411,15 +369,8 @@ def _attenuation(r, o, bank):
     o["rtpc"] = _rtpcs(r)
 
 
+# CAkBus::SetInitialValues @df5b40, CAkBus::AddDuck @df5aa0 decomp
 def _bus(r, o, bank):
-    """`CAkBus::SetInitialValues` @df5b40. Not `CAkParameterNodeBase::SetNodeBaseParams`: a bus has its
-    own, older, shorter field order (wwiser's `CAkBus__SetInitialValues`/`CAkBus__SetInitialParams`,
-    version gates `<=53`/`<=48`, both this bank's versions 44 and 48 satisfy). `duck` and `to_duck` are
-    `CAkBus::AddDuck` @df5aa0's five arguments per entry (bus, dB, fade-out ms, fade-in ms, curve): what
-    playing a voice through this bus does to another's volume, while it does
-    (`CAkBus::Duck`/`UpdateDuckedBus` @df5ea0/@df5fc0). Measured against all 14 `Bus` objects of
-    `Init.bnk` (the only bank that has any): every one reads to exactly its size.
-    """
     o["override_bus"] = r.u32()
     o["volume"], o["lfe"], o["pitch"], o["lpf"] = r.f32(), r.f32(), r.f32(), r.f32()
     o["kill_newest"] = r.u8() != 0

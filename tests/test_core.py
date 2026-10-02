@@ -1,4 +1,3 @@
-"""dv2lib against archives and documents built here: no game files needed."""
 import json
 import struct
 import zlib
@@ -9,7 +8,6 @@ from dv2lib import archive, binxml, names, nif as nifmod, unpack
 
 
 def dv2(files: dict[str, bytes], compress: bool = True) -> bytes:
-    """A V5 archive, packed tight (align_32k=1)."""
     table = b"".join(n.encode("latin-1") + b"\0" for n in files)
     blobs = []
     for data in files.values():
@@ -36,7 +34,6 @@ def nif(payload: bytes) -> bytes:
             + struct.pack("<I", len(payload)) + struct.pack("<III", 0, 0, 0) + payload)
 
 
-# Root(Name="a") with text "t" and two children <item>x</item>, <item>y</item>, narrow counts.
 ROOT, NAME, ITEM = 0x11111111, 0x002C70A1, 0x003B8EAF
 DOC = block(["t", "a", "x", "y"],
             struct.pack("<BI", 0x0F, ROOT) + bytes([1]) + struct.pack("<I", NAME) + bytes([2])
@@ -68,7 +65,7 @@ def test_archive_refuses(tmp_path):
 def test_binxml_parse():
     root = binxml.parse(binxml.payload(nif(DOC)))
     assert (root.name_hash, root.text, root.attributes, root.narrow) == (ROOT, "t", [(NAME, "a")], True)
-    assert [c.text for c in root.children] == ["x", "y"]          # stream order
+    assert [c.text for c in root.children] == ["x", "y"]
 
 
 @pytest.mark.parametrize("bad", [DOC + b"\0", DOC[:-1], DOC[:12 + 8] + b"\xf0" + DOC[21:]])
@@ -80,7 +77,6 @@ def test_binxml_refuses(bad):
 def test_names():
     assert names.name_of(NAME) == "Name"
     assert names.name_of(ROOT) is None
-    # every recovered name hashes to the key it is filed under
     assert all(binxml.hash_of(v) == k for k, v in names.NAMES.items())
 
 
@@ -88,7 +84,7 @@ def test_plain_engine_order_and_unknown():
     unknown = {}
     tree = unpack.plain(binxml.parse(DOC), unknown, "x.xml")
     assert tree["name"] == "#11111111" and unknown == {"#11111111": "x.xml"}
-    assert [c["text"] for c in tree["children"]] == ["y", "x"]   # engine order: reversed
+    assert [c["text"] for c in tree["children"]] == ["y", "x"]
 
 
 def test_unpack_end_to_end(tmp_path):
@@ -113,7 +109,7 @@ def test_binxml_build_round_trip_and_widens_counts():
     root = binxml.parse(DOC)
     assert binxml.build(binxml.Document(root)) == DOC
     root.children = [binxml.Node(ITEM, text=str(i)) for i in range(300)]
-    back = binxml.parse(binxml.build(binxml.Document(root)))       # 300 children: no longer one byte
+    back = binxml.parse(binxml.build(binxml.Document(root)))
     assert [c.text for c in back.children] == [str(i) for i in range(300)] and not back.narrow
 
 
@@ -140,12 +136,10 @@ def test_wwise_bank_event_to_media():
     act = b.objects[ev["actions"][0]]
     assert (act["action"], act["fade_curve"], act["file"]) == ("Play", "Linear", 9)
     assert b.media[b.objects[act["target"]]["source"]["source"]] == b"RIFF"
-    assert wwise.id_of("aleroth_AD_heal2") == 741412071        # measured: the bank's own STID entry
+    assert wwise.id_of("aleroth_AD_heal2") == 741412071
 
 
 def test_savestate_write_reads_back():
-    """A savegame written from a header, three sections and a two-block story reads back the same,
-    with a bool byte that is neither 0 nor 1 kept as it was."""
     from dv2lib import savegame, savestate
     header = savegame.Header(0, -1, "", 3, 2, 1, 0, "", 3, 1, 1, "004_Tutorial", "Main", "",
                              (1.0, 2.0, 3.0), "Episode_1_Extended", 0)

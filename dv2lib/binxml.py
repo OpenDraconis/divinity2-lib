@@ -1,9 +1,3 @@
-"""Larian's binary XML: a tree with every name replaced by a 32-bit hash, in a NIF container.
-
-A document is a NIF file of one `xml::dom::CStreamableNode` block. The block is
-three counts, a table of NUL-terminated strings, then the nodes depth first.
-"""
-
 from __future__ import annotations
 
 import struct
@@ -11,7 +5,7 @@ from dataclasses import dataclass, field
 from typing import Iterator
 
 from . import Dv2Error, codec, nif
-from .larian_hash import name_hash as _hash    # the field of the same name shadows it inside Node
+from .larian_hash import name_hash as _hash
 from .names import name_of
 
 NIF_MAGIC = nif.MAGIC
@@ -29,7 +23,6 @@ class BinXmlError(Dv2Error):
 
 
 def hash_of(name: str) -> int:
-    """The hash of an element or attribute name, or a literal `#hhhhhhhh` hash written out."""
     if name.startswith("#"):
         try:
             return int(name[1:], 16)
@@ -48,7 +41,6 @@ class Node:
 
     @property
     def name(self) -> str:
-        """The element name, or the hash in hex if it has not been recovered."""
         return name_of(self.name_hash) or f"#{self.name_hash:08x}"
 
     def attr(self, name: str) -> str | None:
@@ -61,22 +53,15 @@ class Node:
             yield from c.walk()
 
     def find(self, name: str) -> Iterator["Node"]:
-        """Every descendant with this element name, including self."""
         wanted = _hash(name)
         return (n for n in self.walk() if n.name_hash == wanted)
 
-    # ---- writing ---------------------------------------------------------
-    #
-    # A document read here is edited in place and written back by `build()`. These are the
-    # four moves that takes, and nothing in them is particular to one kind of document.
 
     def copy(self) -> "Node":
-        """A deep copy: the children come along, the parent does not."""
         return Node(self.name_hash, list(self.attributes), self.text,
                     [c.copy() for c in self.children], self.narrow)
 
     def child(self, name: str, create: bool = True) -> "Node | None":
-        """The first child of this name, made if it is not there. `None` when `create` is off."""
         h = hash_of(name)
         c = next((k for k in self.children if k.name_hash == h), None)
         if c is None and create:
@@ -85,7 +70,6 @@ class Node:
         return c
 
     def set_attr(self, name: str, value: str | None) -> None:
-        """Set one attribute, keeping its place. `None` removes it."""
         h = hash_of(name)
         for i, (ah, _) in enumerate(self.attributes):
             if ah == h:
@@ -98,12 +82,6 @@ class Node:
             self.attributes.append((h, value))
 
     def set_items(self, name: str, values: list[str], text: str | None = None) -> None:
-        """`<name><item>a</item><item>b</item></name>`, replacing what was there.
-
-        `text` is what the container itself carries. Larian's own files disagree about it —
-        a quest container holds nothing, a dialog container holds the tabs it was indented
-        with — so the caller says which, and the default writes nothing.
-        """
         c = self.child(name)
         c.children = [Node(hash_of("item"), text=v) for v in values]
         c.text = text
@@ -131,19 +109,16 @@ def _header(data: bytes) -> nif.Header:
 
 
 def payload(data: bytes) -> bytes:
-    """The one block of a NIF-wrapped binary XML file."""
     h = _header(data)
     return data[h.end:h.end + h.sizes[0]]
 
 
 def rewrap(data: bytes, block: bytes) -> bytes:
-    """`data` with its one block replaced by `block`, the header's size field updated."""
     _header(data)
     return nif.set_block(data, 0, block)
 
 
 def parse(data: bytes) -> Node:
-    """The root node of the bytes of one `xml::dom::CStreamableNode` block."""
     if len(data) < 12:
         raise BinXmlError("block is too short to hold the three header counts")
     n_nodes, n_attrs, n_strings = struct.unpack_from("<III", data, 0)
@@ -154,8 +129,6 @@ def parse(data: bytes) -> Node:
     table = data[pos:pos + n_strings]
     pos += n_strings
 
-    # The last string is NUL-terminated too, so the split leaves a trailing
-    # empty element that is not a string.
     strings = table.split(b"\x00")[:-1] if n_strings else []
 
     at, next_string, nodes, attrs = pos, 0, 0, 0
@@ -168,8 +141,6 @@ def parse(data: bytes) -> Node:
                 "strings are already spoken for"
             )
         next_string += 1
-        # Larian's files are UTF-8 where they are anything, but a handful of
-        # strings are not valid UTF-8 at all; surrogateescape keeps their bytes.
         return strings[next_string - 1].decode("utf-8", errors="surrogateescape")
 
     def count(flags: int) -> int:
@@ -225,10 +196,9 @@ def parse(data: bytes) -> Node:
 
 
 def build(doc: Document) -> bytes:
-    """Serialise a document back to the bytes of a CStreamableNode block."""
     values: list[str] = []
     body = bytearray()
-    counts = [0, 0]              # nodes, attributes: counted while emitting, not in two more walks
+    counts = [0, 0]
 
     def emit(node: Node) -> None:
         counts[0] += 1
@@ -240,8 +210,6 @@ def build(doc: Document) -> bytes:
             flags |= HAS_ATTRIBUTES
         if node.text is not None:
             flags |= HAS_TEXT
-        # A count that no longer fits in a byte forces the wide form, so
-        # adding children to a node keeps producing a readable file.
         narrow = node.narrow and max(len(node.attributes), len(node.children)) < 256
         if narrow:
             flags |= NARROW_COUNTS
@@ -249,7 +217,7 @@ def build(doc: Document) -> bytes:
         body.extend(struct.pack("<BI", flags, node.name_hash))
         pack = (lambda n: struct.pack("<B", n)) if narrow else \
                (lambda n: struct.pack("<I", n))
-        if node.text is not None:          # the text before the attribute values, as read
+        if node.text is not None:
             values.append(node.text)
         if node.attributes:
             body.extend(pack(len(node.attributes)))
