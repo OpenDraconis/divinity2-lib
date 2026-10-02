@@ -7,7 +7,7 @@ building and installing mods is [divinity2-tools](https://github.com/ygalsk/divi
 - `.dv2` archive reading
 - the engine's archive search order, and which entry wins a path
 - binary XML read and written, and the names behind its hashes
-- the Osiris story: read, written, decompiled; savegames and the state they load
+- the Osiris story: read, written, decompiled; savegames and the state they load, read and written
 - Wwise sound banks: the media and the objects
 - unpacking to named JSON
 
@@ -51,7 +51,7 @@ tree = unpack.plain(binxml.parse(binxml.payload(data)), {}, entry.path)
 | `codec` | the game's text bytes, kept byte for byte |
 | `osiris_story`, `osiris_write`, `osiris_source` | the Osiris story: read, written, decompiled |
 | `story` | an episode's story, from its initial savegame |
-| `savegame`, `savestate` | savegames, and the engine state they load |
+| `savegame`, `savestate` | savegames, and the engine state they load: read, written, as JSON and back |
 | `wwise` | Wwise sound banks: media, objects, event IDs |
 | `dialog` | the animation packs a dialog loads |
 | `unpack` | named JSON export |
@@ -63,6 +63,8 @@ The Steam Developer's Cut, with 0.2.0: the engine consults 532 shipped archives
 and 34,857 paths win; 3,972 of the `.xml` files are binary XML and 124 are
 plain text; the name table holds 1,146 names, and 49 hashes in the shipped
 documents are still unnamed.
+Both shipped initial savegames, read, written through JSON and read again, give the same
+decompressed stream and header (`python -m dv2lib.savestate round-trip <save.dsg>...`).
 
 ## License
 

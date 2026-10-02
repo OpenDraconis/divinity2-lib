@@ -141,3 +141,19 @@ def test_wwise_bank_event_to_media():
     assert (act["action"], act["fade_curve"], act["file"]) == ("Play", "Linear", 9)
     assert b.media[b.objects[act["target"]]["source"]["source"]] == b"RIFF"
     assert wwise.id_of("aleroth_AD_heal2") == 741412071        # measured: the bank's own STID entry
+
+
+def test_savestate_write_reads_back():
+    """A savegame written from a header, three sections and a two-block story reads back the same,
+    with a bool byte that is neither 0 nor 1 kept as it was."""
+    from dv2lib import savegame, savestate
+    header = savegame.Header(0, -1, "", 3, 2, 1, 0, "", 3, 1, 1, "004_Tutorial", "Main", "",
+                             (1.0, 2.0, 3.0), "Episode_1_Extended", 0)
+    sections = {"SaveLoadPreMisc - CRpgStats_V2_TimerManager": {"Timers": [{"UUID": "T", "Duration": 1.5}]},
+                "SaveLoadPreMisc - CGameLogic_SyncData": {"RenderShadows": 32, "HideInShadows": False,
+                                                          "TimeName": "Noon"},
+                "SaveLoadStory": {"OsirisStoryStarted": True, "OsirisChunkBuffer": 1024}}
+    story = bytes(range(256)) * 6
+    data = savestate.write(header, sections, story)
+    assert savestate.read(data) == {**sections, "SaveLoadStory": {**sections["SaveLoadStory"], "StoryBytes": 1536}}
+    assert savegame.story_of(data) == story

@@ -139,13 +139,22 @@ def blocks(story: bytes) -> bytes:
     return bytes(out)
 
 
-def rebuild(data: bytes, story: bytes) -> bytes:
-    """`data` with `story` in place of its story: sizes, and the checksum."""
-    header, stream = split(data)
-    start, end, _ = story_span(stream)
-    stream = stream[:start] + blocks(story) + stream[end:]
-    stream = struct.pack("<I", len(stream) - 4) + stream[4:]
-    z = zlib.compress(stream, 9)
+def header_bytes(h: Header) -> bytes:
+    """`h` as `read_header` reads it. The sizes, the checksum and the zlib length are zero until
+    `pack` sets them."""
+    s = lambda t: struct.pack("<I", len(t.encode("latin-1"))) + t.encode("latin-1")
+    return (bytes(12) + struct.pack("<i", h.id) + s(h.name)
+            + struct.pack("<IIIQ", h.major, h.minor, h.language, h.time) + s(h.description)
+            + struct.pack("<IBB", h.type, h.compressed, h.saveload_objects)
+            + s(h.region) + s(h.subregion) + s(h.timesettings) + struct.pack("<3f", *h.position)
+            + s(h.episode) + TAIL + bytes(4))
+
+
+def pack(header: bytes, stream: bytes) -> bytes:
+    """`header` and the zlib of `stream`, with the sizes and the checksum set. zlib at its default
+    level, which both shipped saves carry (`78 9c`); the deflate bytes themselves differ between
+    zlib builds and are not compared."""
+    z = zlib.compress(stream)
     header = bytearray(header)
     total = len(header) + len(z)
     struct.pack_into("<I", header, 0, total - 4)
@@ -153,6 +162,14 @@ def rebuild(data: bytes, story: bytes) -> bytes:
     struct.pack_into("<I", header, len(header) - 4, len(z))
     struct.pack_into("<I", header, 4, checksum(bytes(header[12:]) + z))
     return bytes(header) + z
+
+
+def rebuild(data: bytes, story: bytes) -> bytes:
+    """`data` with `story` in place of its story: sizes, and the checksum."""
+    header, stream = split(data)
+    start, end, _ = story_span(stream)
+    stream = stream[:start] + blocks(story) + stream[end:]
+    return pack(header, struct.pack("<I", len(stream) - 4) + stream[4:])
 
 
 def _databases(st: osiris_story.Story) -> dict:
