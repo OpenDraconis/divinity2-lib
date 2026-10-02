@@ -4,7 +4,7 @@ import struct
 import zlib
 from dataclasses import dataclass
 from pathlib import Path
-from typing import BinaryIO, Iterator
+from typing import BinaryIO, Iterable, Iterator
 
 from . import Dv2Error
 
@@ -152,6 +152,34 @@ def safe_destination(outdir: Path, posix_path: str) -> Path:
 
 
 ALIGNMENT = 32768
+
+
+def _aligned(n: int) -> int:
+    return -(-n // ALIGNMENT) * ALIGNMENT
+
+
+def write(path: Path | str, files: Iterable[tuple[str, bytes]]) -> int:
+    files = [(name.replace("/", "\\"), data) for name, data in files]
+    seen: set[str] = set()
+    for name, _ in files:
+        if name.lower() in seen:
+            raise ArchiveError(f"{name}: in the archive twice")
+        seen.add(name.lower())
+    table = b"".join(name.encode("latin-1") + b"\0" for name, _ in files)
+    blobs = [(zlib.compress(data, 9), len(data)) if data else (data, 0) for _, data in files]
+    data_start = _aligned(HEADER_SIZE_V5 + len(table) + 4 + DIR_ENTRY_SIZE * len(files))
+    offsets, offset = [], 0
+    for stored, _ in blobs:
+        offsets.append(offset)
+        offset = _aligned(offset + len(stored))
+    with Path(path).open("wb") as out:
+        out.write(struct.pack("<IIIBBII", 5, 1, 4, 0, 1, data_start, len(table)))
+        out.write(table + struct.pack("<I", len(files)))
+        out.write(b"".join(struct.pack("<III", o, len(stored), size) for o, (stored, size) in zip(offsets, blobs)))
+        for o, (stored, _) in zip(offsets, blobs):
+            out.seek(data_start + o)
+            out.write(stored)
+    return len(files)
 
 
 def check_invariants(archive: Archive) -> list[str]:
