@@ -1,32 +1,3 @@
-"""Parse a Divinity II Osiris story (`.osi` / `.osb`), structurally.
-
-The grammar is read out of `COsiris::_Read*` and `COsiSmartBuf::read*` in
-`Divinity2-debug.exe`; divinity2-research `docs/osiris.md` has the addresses and
-the per-field evidence. Two facts make the file readable at all:
-
-  * every **string** is NUL-terminated and XOR-ed byte-by-byte with a key that
-    `_ReadHeader` sets to 0xAD once the header is past. Integers are *not*
-    obfuscated. That is why a naive `strings` on the file finds nothing.
-  * the header's byte at 0x38 is `SetBufferBigEndian`'s argument. `.osi` is the
-    little-endian story, `.osb` the big-endian (Xbox 360) one, which is why the
-    pair have identical length and differ in ~15% of bytes.
-
-Nothing here guesses: a section that cannot be parsed raises rather than
-resyncing, so a clean run to the last byte (`Story.clean`) is itself the check
-that the grammar is right.
-
-The header, DIV object and function readers were recovered from
-`Divinity2-debug.exe` directly. The node, adapter, database, goal and global
-action readers are `[X]`: the record layouts are taken from Norbyte's LSLib
-(`LSLib/LS/Story/*.cs`), which implements this same format for Divinity:
-Original Sin 1/2 and Baldur's Gate 3 and versions its readers by the story
-version. Divinity II ships version 1.4, and LSLib names 1.4 exactly:
-`VerScramble = 0x0104`, "started scrambling strings by xor-ing with 0xAD",
-the obfuscation this file already had to discover from the binary. Every
-version gate below is LSLib's. Borrowed layouts are not trusted on their word:
-the parse has to land on the last byte of the file, for all four shipped stories.
-"""
-
 from __future__ import annotations
 
 import struct
@@ -36,16 +7,13 @@ XOR_KEY = 0xAD
 
 
 class Buf:
-    """`COsiSmartBuf`, reading side, with its two independent quirks."""
-
     def __init__(self, data: bytes) -> None:
         self.d = data
         self.p = 0
-        self.key = 0          # armed to 0xAD by the header
-        self.big = False      # SetBufferBigEndian
-        self.ver = (1, 4)     # set by the header; gates the two 1.7 additions
+        self.key = 0
+        self.big = False
+        self.ver = (1, 4)
 
-    # -- COsiSmartBuf::read(char*) / AllocAndRead: NUL-terminated, XOR-ed
     def cstr(self) -> str:
         out = bytearray()
         while True:
@@ -61,7 +29,6 @@ class Buf:
         self.p += n
         return b
 
-    # -- endian_read: never XOR-ed
     def u8(self) -> int:
         v = self.d[self.p]
         self.p += 1
@@ -99,8 +66,6 @@ class Header:
     fourth: int
     version_block: bytes
     debug_flags: int
-    #: version 1.5 and later: the story's own types, (name, id). Divinity II
-    #: (1.4) has no such table and names its types through the DIV objects.
     types: list = field(default_factory=list)
 
 
@@ -108,9 +73,9 @@ VER_TYPE_MAP = (1, 5)
 VER_QUERY = (1, 6)
 
 
+# COsiris::_ReadHeader @d61c90 decomp
 def read_header(b: Buf) -> Header:
-    """COsiris::_ReadHeader @ 00ec4200 (Divinity2-debug.exe)."""
-    lead = b.u8()                      # see spec §1b.3: unexplained leading byte
+    lead = b.u8()
     banner = b.cstr()
     major, minor, endian, fourth = b.u8(), b.u8(), b.u8(), b.u8()
     b.big = endian == 1
@@ -125,8 +90,6 @@ def read_header(b: Buf) -> Header:
     return Header(lead, banner, major, minor, endian, fourth, vblock, flags, types)
 
 
-# --------------------------------------------------------------- DIV objects
-
 @dataclass
 class DivObject:
     name: str
@@ -134,8 +97,8 @@ class DivObject:
     key: tuple
 
 
+# COsiris::_ReadDIVObjects @d62760 decomp
 def read_div_objects(b: Buf) -> list:
-    """COsiris::_ReadDIVObjects @ 00ec4cd0, element reader @ 00ef6420."""
     n = b.u32()
     out = []
     for _ in range(n):
@@ -146,19 +109,9 @@ def read_div_objects(b: Buf) -> list:
     return out
 
 
-# ----------------------------------------------------------------- functions
-
-# 0..3 are stated by the compiler's own DefineType diagnostics in
-# Divinity2-debug.exe; 4.. are per-story, declared by DefineType and recovered
-# here from the DIV object table's name prefixes.
 VALUE_TYPES = {0: "unknown", 1: "INTEGER", 2: "REAL", 3: "STRING"}
 
 def type_names_from_objects(objs) -> dict:
-    """Recover the story's own TOsiValueType >= 4 from the DIV object table.
-
-    Every DIV object's name is `<TYPENAME>_<instance>`, and its type id is the
-    same for every object sharing a prefix, so the table names its own types.
-    """
     m = {}
     for o in objs:
         m.setdefault(o.type_id, set()).add(o.name.split("_")[0])
@@ -185,12 +138,6 @@ class Function:
 
 
 def read_signature(b: Buf) -> tuple:
-    """FUN_00efbcc0: name, out-parameter bitset, parameter type list.
-
-    The bitset is length-prefixed in *bytes* and precedes the arity; measured,
-    `nbytes == arity // 8 + 1` holds for all 3327 signatures in the four shipped
-    stories. Bit order is MSB-first: bit 7 of byte 0 is parameter 1.
-    """
     name = b.cstr()
     nmask = b.u32()
     mask = b.raw(nmask)
@@ -200,8 +147,8 @@ def read_signature(b: Buf) -> tuple:
     return name, mask, params, outs
 
 
+# COsiris::_ReadFunctions @d62840 decomp
 def read_functions(b: Buf) -> list:
-    """COsiris::_ReadFunctions @ 00ec4db0, element reader @ 00ef65b0."""
     n = b.u32()
     out = []
     for _ in range(n):
@@ -215,38 +162,13 @@ def read_functions(b: Buf) -> list:
     return out
 
 
-# --------------------------------------------------------------- the network
-#
-# Everything from here down is `[X]` LSLib's record layout. Divinity II ships story
-# version 1.4 (major 1, minor 4 -> 0x0104). LSLib's version gates that matter
-# here, and how 1.4 falls on each:
-#
-#   VerAddInitExitCalls 0x0101   1.4 >= it  -> goals carry INIT and EXIT lists
-#   VerAddVersionString 0x0102   1.4 >= it  -> the 128-byte block in the header
-#   VerAddDebugFlags    0x0103   1.4 >= it  -> the option dword in the header
-#   VerScramble         0x0104   1.4 == it  -> strings are XOR 0xAD
-#   VerAddTypeMap       0x0105   1.4 <  it  -> no type table; ids 4..17 alias STRING
-#   VerAddQuery         0x0106   1.4 <  it  -> no user-query nodes, no rule IsQuery
-#   VerEnhancedTypes    0x010a   1.4 <  it  -> OS1 type ids: 1 INT, 2 REAL, 3 STRING
-#   VerValueFlags       0x010e   1.4 <  it  -> values carry explicit flag bytes
-#
-# The reader follows the 0x0105 and 0x0106 gates too (`VER_TYPE_MAP`, `VER_QUERY`),
-# so a later story reads as well; the shipped 1.4 files take neither branch.
-#
-# The consequence of the two type gates together: a value whose type id is >= 4
-# is a story-defined type, aliases STRING, and is written *without* the
-# has-string flag byte that a plain STRING carries. Getting that one byte wrong
-# desynchronises the whole file, which is why ending on the last byte is the test.
-
-TYPE_ALIAS_MIN, TYPE_ALIAS_MAX = 4, 17     # LSLib: ids in this range alias STRING
+TYPE_ALIAS_MIN, TYPE_ALIAS_MAX = 4, 17
 
 NODE_TYPES = {
     1: "Database", 2: "Proc", 3: "DivQuery", 4: "And",
     5: "NotAnd", 6: "RelOp", 7: "Rule", 8: "InternalQuery",
 }
 
-#: LSLib's RelOpType. Closes the `[UNKNOWN]` in divinity2-research `docs/osiris.md`'s
-#: negative-results list: strict `<` and `>` *are* separate members.
 REL_OPS = {0: "<", 1: "<=", 2: ">", 3: ">=", 4: "==", 5: "!="}
 
 
@@ -254,21 +176,17 @@ REL_OPS = {0: "<", 1: "<=", 2: ">", 3: ">=", 4: "==", 5: "!="}
 class Value:
     type_id: int = 0
     value: object = None
-    # TypedValue
     is_valid: bool = False
     out_param: bool = False
     is_a_type: bool = False
-    # Variable
     index: int = 0
     unused: bool = False
     adapted: bool = False
     is_variable: bool = False
     name: str = ""
-    #: the tag byte was '1': a DIV object handle, stored as an integer
     handle: bool = False
 
 def read_value(b: Buf) -> Value:
-    """LSLib Value.Read at Ver < VerValueFlags."""
     v = Value()
     tag = b.u8()
     if tag == ord("1"):
@@ -280,7 +198,7 @@ def read_value(b: Buf) -> Value:
         written = v.type_id
         dos1alias = False
         if TYPE_ALIAS_MIN <= written <= TYPE_ALIAS_MAX:
-            written, dos1alias = 3, True       # every story type aliases STRING
+            written, dos1alias = 3, True
         if written == 0:
             pass
         elif written == 1:
@@ -315,7 +233,6 @@ def read_variable(b: Buf) -> Value:
 
 
 def read_tuple(b: Buf) -> list:
-    """LSLib Tuple.Read: count, then (columnIndex, Value) pairs."""
     out = []
     for _ in range(b.u8()):
         idx = b.u8()
@@ -329,8 +246,6 @@ class Call:
     params: list
     negate: bool
     goal_id: int
-    #: the has-parameters byte as stored; a call without parameters may
-    #: carry 0 or 1, and the writer keeps what it read
     has_params: int = 0
 
 def read_call(b: Buf) -> Call:
@@ -395,18 +310,18 @@ def _read_rel_node(b: Buf, n: Node) -> None:
     n.fields["rel_indirection"] = b.u8()
 
 
+# COsiris::_ReadReteNodes @d61f40 decomp
 def read_node(b: Buf) -> Node:
-    """COsiris::_ReadReteNodes @ 00ec44b0: u8 type, u32 index, then the body."""
     t = b.u8()
     if t not in NODE_TYPES:
         raise ValueError(f"invalid rete node type 0x{t:02x} at 0x{b.p - 1:x}")
     n = Node(b.u32(), t, 0, "", 0)
-    if t in (1, 2):                                   # Database, Proc: DataNode
+    if t in (1, 2):
         _read_node_common(b, n)
         n.fields["referenced_by"] = [read_node_entry(b) for _ in range(b.u32())]
-    elif t in (3, 8):                                 # DivQuery, InternalQuery
+    elif t in (3, 8):
         _read_node_common(b, n)
-    elif t in (4, 5):                                 # And, NotAnd: JoinNode
+    elif t in (4, 5):
         _read_tree_node(b, n)
         n.fields["left_parent"] = b.u32()
         n.fields["right_parent"] = b.u32()
@@ -418,14 +333,14 @@ def read_node(b: Buf) -> Node:
         n.fields["right_db"] = b.u32()
         n.fields["right_join"] = read_node_entry(b)
         n.fields["right_indirection"] = b.u8()
-    elif t == 6:                                      # RelOp
+    elif t == 6:
         _read_rel_node(b, n)
         n.fields["left_index"] = struct.unpack("b", bytes([b.u8()]))[0]
         n.fields["right_index"] = struct.unpack("b", bytes([b.u8()]))[0]
         n.fields["left_value"] = read_value(b)
         n.fields["right_value"] = read_value(b)
         n.fields["rel_op"] = b.i32()
-    elif t == 7:                                      # Rule terminal
+    elif t == 7:
         _read_rel_node(b, n)
         n.fields["calls"] = read_call_list(b)
         variables = []
@@ -537,8 +452,8 @@ class Story:
         return tn
 
 
+# LoadTaskData::GetVersion @ec7860 decomp
 def read_story(data: bytes) -> Story:
-    """The section order of COsiris::Load @ 00ec7860, end to end."""
     b = Buf(data)
     h = read_header(b)
     objs = read_div_objects(b)
@@ -552,17 +467,7 @@ def read_story(data: bytes) -> Story:
                  b.p, len(b.d))
 
 
-# ------------------------------------------------------------------- rules
-#
-# A rule terminal owns its action list, but its *conditions* are the chain of
-# nodes above it, which is what a Rete network is: the rule does not hold its
-# own IF, the network holds it once and shares it.
-#
-# Which goal a rule belongs to is not stored on the rule. LSLib derives it the
-# same way: whichever node entry *points at* the rule carries the goal id.
-
 def rule_goals(nodes) -> dict:
-    """rule node index -> goal index, from every NodeEntry that names one."""
     by_index = {n.index: n for n in nodes}
     out = {}
     for n in nodes:
@@ -579,8 +484,6 @@ def rule_goals(nodes) -> dict:
 
 
 class StoryIndex:
-    """What the goal renderer needs, computed one time for one story."""
-
     def __init__(self, st: "Story"):
         self.story = st
         self.by_index = {n.index: n for n in st.nodes}
@@ -596,5 +499,4 @@ class StoryIndex:
             group.sort(key=lambda n: n.fields["line"])
 
     def unattributed(self) -> int:
-        """Rules that no node entry gives a goal to."""
         return sum(1 for r in self.rules if r.index not in self.goal_of)

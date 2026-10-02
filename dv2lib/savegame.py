@@ -1,4 +1,3 @@
-"""The savegame container, and the story inside it."""
 from __future__ import annotations
 
 import dataclasses
@@ -58,7 +57,6 @@ class _Reader:
 
 
 def read_header(data: bytes) -> tuple[Header, int]:
-    """The header, and the offset of the zlib stream."""
     r = _Reader(data)
     total4, checksum, total12 = r.u32(), r.u32(), r.u32()
     if total4 != len(data) - 4 or total12 != len(data) - 12:
@@ -80,12 +78,10 @@ def read_header(data: bytes) -> tuple[Header, int]:
     return h, r.q
 
 
-#: The game reads each byte as a signed char, so 0x80..0xFF count as negative.
 _SIGNED = [b - 256 if b > 127 else b for b in range(256)]
 
 
 def checksum(data: bytes) -> int:
-    """The game's CalculateCheckSum over `data`."""
     h = 0
     for c in map(_SIGNED.__getitem__, data):
         h = (h * 33 + c) & 0xFFFFFFFF
@@ -95,7 +91,6 @@ def checksum(data: bytes) -> int:
 
 
 def check(data: bytes) -> Header:
-    """The header, after the checksum passed; raises otherwise."""
     h, at = read_header(data)
     got = checksum(data[12:])
     if got != h.checksum:
@@ -104,17 +99,15 @@ def check(data: bytes) -> Header:
 
 
 def split(data: bytes) -> tuple[bytes, bytes]:
-    """(the header bytes, the decompressed stream)."""
     _, at = read_header(data)
     return data[:at], zlib.decompress(data[at:])
 
 
 def story_span(stream: bytes) -> tuple[int, int, bytes]:
-    """(first block, end of the last block, the story) in a decompressed stream."""
     s = stream.find(SECTION)
     if s < 0:
         raise SaveError("no SaveLoadStory section")
-    q = s + len(SECTION) + 1 + 4 + 4          # NUL, u32 0, u32 block size
+    q = s + len(SECTION) + 1 + 4 + 4
     start, parts = q, []
     while True:
         a, n = struct.unpack_from("<II", stream, q)
@@ -140,8 +133,6 @@ def blocks(story: bytes) -> bytes:
 
 
 def header_bytes(h: Header) -> bytes:
-    """`h` as `read_header` reads it. The sizes, the checksum and the zlib length are zero until
-    `pack` sets them."""
     s = lambda t: struct.pack("<I", len(t.encode("latin-1"))) + t.encode("latin-1")
     return (bytes(12) + struct.pack("<i", h.id) + s(h.name)
             + struct.pack("<IIIQ", h.major, h.minor, h.language, h.time) + s(h.description)
@@ -151,9 +142,6 @@ def header_bytes(h: Header) -> bytes:
 
 
 def pack(header: bytes, stream: bytes) -> bytes:
-    """`header` and the zlib of `stream`, with the sizes and the checksum set. zlib at its default
-    level, which both shipped saves carry (`78 9c`); the deflate bytes themselves differ between
-    zlib builds and are not compared."""
     z = zlib.compress(stream)
     header = bytearray(header)
     total = len(header) + len(z)
@@ -165,7 +153,6 @@ def pack(header: bytes, stream: bytes) -> bytes:
 
 
 def rebuild(data: bytes, story: bytes) -> bytes:
-    """`data` with `story` in place of its story: sizes, and the checksum."""
     header, stream = split(data)
     start, end, _ = story_span(stream)
     stream = stream[:start] + blocks(story) + stream[end:]
@@ -174,13 +161,10 @@ def rebuild(data: bytes, story: bytes) -> bytes:
 
 def _databases(st: osiris_story.Story) -> dict:
     names = {n.db: n.name for n in st.nodes if n.type_id == 1}
-    # a database is its name and its column types: HasRedOre exists with
-    # one column and with two
     return {(names[d.index], tuple(d.params)): d for d in st.databases if d.index in names}
 
 
 def transplant(fresh: bytes, runtime: bytes, new_goals: set[str]) -> bytes:
-    """The freshly compiled story carrying the runtime story's state"""
     f = osiris_story.read_story(fresh)
     s = osiris_story.read_story(runtime)
     facts = _databases(s)

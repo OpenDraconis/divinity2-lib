@@ -1,4 +1,3 @@
-"""The Osiris story: read from the initial savegame the game loads for each episode."""
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -17,7 +16,7 @@ class Loaded:
     story: osiris_story.Story
     index: osiris_story.StoryIndex
     decompiler: Decompiler
-    save: bytes = b""          # the initial savegame the story came from
+    save: bytes = b""
 
     @property
     def names(self) -> list[str]:
@@ -25,7 +24,6 @@ class Loaded:
 
 
 def episodes(packed: Path) -> dict[str, corpus.Entry]:
-    """Episode name -> the initial savegame the game loads for it"""
     idx = corpus.index(packed, lambda k: k.endswith(SUFFIX))
     out = {}
     for e in idx.values():

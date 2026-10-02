@@ -1,9 +1,3 @@
-"""The NIF container every Gamebryo file comes in: a header, then its blocks back to back.
-
-The header at NIF 20.3.0.9: a version line, version, endianness, user version, block
-count, block type names, a type index and a size per block, the string table, then the
-groups. Only the header is read here; what a block holds is its type's business.
-"""
 from __future__ import annotations
 
 import struct
@@ -20,14 +14,13 @@ class NifError(Dv2Error):
 
 @dataclass(frozen=True)
 class Header:
-    types: list[str]            # the block type names, each once
-    sizes: list[int]            # per block, in bytes
-    sizes_at: int               # offset of the first block size
+    types: list[str]
+    sizes: list[int]
+    sizes_at: int
     strings: list[str]
-    end: int                    # where the first block starts
+    end: int
 
     def bounds(self, index: int) -> tuple[int, int]:
-        """(start, size) of one block."""
         if not 0 <= index < len(self.sizes):
             raise NifError(f"block {index} is out of range (0..{len(self.sizes) - 1})")
         return self.end + sum(self.sizes[:index]), self.sizes[index]
@@ -38,20 +31,20 @@ def parse_header(data: bytes) -> Header:
         raise NifError("not a NIF file")
     try:
         pos = data.index(b"\n") + 1
-        pos += 4                                   # version
+        pos += 4
         if data[pos] != 1:
             raise NifError(f"big-endian NIF not supported (endian={data[pos]})")
-        pos += 1 + 4                               # endianness, user version
+        pos += 1 + 4
         num_blocks, = struct.unpack_from("<I", data, pos); pos += 4
         num_types, = struct.unpack_from("<H", data, pos); pos += 2
         types = []
         for _ in range(num_types):
             n, = struct.unpack_from("<I", data, pos); pos += 4
             types.append(data[pos:pos + n].decode("latin-1")); pos += n
-        pos += 2 * num_blocks                      # block type index
+        pos += 2 * num_blocks
         sizes_at = pos
         sizes = list(struct.unpack_from(f"<{num_blocks}I", data, pos)); pos += 4 * num_blocks
-        num_strings, = struct.unpack_from("<I", data, pos); pos += 8   # and max length
+        num_strings, = struct.unpack_from("<I", data, pos); pos += 8
         strings = []
         for _ in range(num_strings):
             n, = struct.unpack_from("<I", data, pos); pos += 4
@@ -68,7 +61,6 @@ def get_block(data: bytes, index: int) -> bytes:
 
 
 def set_block(data: bytes, index: int, payload: bytes) -> bytes:
-    """`data` with one block's bytes replaced and the size the header declares for it."""
     h = parse_header(data)
     start, size = h.bounds(index)
     out = bytearray(data[:start])

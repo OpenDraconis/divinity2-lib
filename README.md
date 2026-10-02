@@ -16,55 +16,21 @@ Python 3.11+ is required. Game data is not included.
 ## Install
 
 ```sh
-pip install divinity2-lib
+git clone git@github.com:OpenDraconis/divinity2-lib.git
+pip install -e divinity2-lib
 ```
 
-To work on it: `pip install -e .[dev]`, then `pytest -q`. The tests need no game files.
+It is not on PyPI. For the Unity port nothing needs installing: the port loads it from
+`../divinity2-lib`, see [divinity2-port](https://github.com/OpenDraconis/divinity2-port).
 
-## Command
+## Use
 
 ```sh
-python -m dv2lib unpack <output> [<game>]
+python -m dv2lib unpack ~/dv2-extract
 ```
 
-Without `<game>`, the command looks for `DV2_GAME` and Steam libraries.
-
-## Library
-
-```python
-from dv2lib import archive, binxml, corpus, locate, unpack
-
-packed = locate.packed_of(locate.find_game())
-entry = corpus.index(packed)["worldregions.xml"]
-with archive.Archive(entry.archive) as source:
-    data = source.read(entry.entry)
-tree = unpack.plain(binxml.parse(binxml.payload(data)), {}, entry.path)
-```
-
-| Module | Purpose |
-|---|---|
-| `archive` | `.dv2` containers |
-| `corpus` | load order and winning entries |
-| `nif` | the NIF container's header, one block got or set |
-| `binxml` | binary XML, read and written |
-| `names`, `larian_hash` | binary-XML names, and the hash that stands for them |
-| `codec` | the game's text bytes, kept byte for byte |
-| `osiris_story`, `osiris_write`, `osiris_source` | the Osiris story: read, written, decompiled |
-| `story` | an episode's story, from its initial savegame |
-| `savegame`, `savestate` | savegames, and the engine state they load: read, written, as JSON and back |
-| `wwise` | Wwise sound banks: media, objects, event IDs |
-| `dialog` | the animation packs a dialog loads |
-| `unpack` | named JSON export |
-| `locate` | game discovery |
-
-## Checked against
-
-The Steam Developer's Cut, with 0.2.0: the engine consults 533 shipped archives
-and 35,079 paths win; 3,972 of the `.xml` files are binary XML and 124 are
-plain text; the name table holds 1,146 names, and 49 hashes in the shipped
-documents are still unnamed.
-Both shipped initial savegames, read, written through JSON and read again, give the same
-decompressed stream and header (`python -m dv2lib.savestate round-trip <save.dsg>...`).
+Commands, environment and the library API: [docs/usage.md](docs/usage.md).
+What the engine and its formats do: [engine/](engine/).
 
 ## License
 

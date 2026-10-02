@@ -1,5 +1,3 @@
-"""Write an Osiris story back to bytes, in the version the game reads."""
-
 from __future__ import annotations
 
 import datetime
@@ -11,8 +9,6 @@ from .osiris_story import (VER_QUERY, VER_TYPE_MAP, XOR_KEY, Header, Story,
 
 
 class Out:
-    """`COsiSmartBuf`, writing side."""
-
     def __init__(self, big: bool = False) -> None:
         self.b = bytearray()
         self.key = 0
@@ -293,7 +289,6 @@ def write_goals(o: Out, goals) -> None:
 
 
 def write_story(st: Story, version: tuple | None = None) -> bytes:
-    """The story as bytes."""
     h = st.header
     if version is not None:
         h = replace(h, major=version[0], minor=version[1])
@@ -310,13 +305,11 @@ def write_story(st: Story, version: tuple | None = None) -> bytes:
 
 
 def banner(version: str = "1.4", when: datetime.datetime | None = None) -> str:
-    """`Osiris save file dd. 12/14/10 10:45:12. Version 1.4.`, as Larian's."""
     when = when or datetime.datetime.now()
     return f"Osiris save file dd. {when:%m/%d/%y %H:%M:%S}. Version {version}."
 
 
 def to_div2(st: Story, template: Header | None = None) -> Story:
-    """The story the compiler library wrote, with the game's header."""
     h = st.header
     flags = template.debug_flags if template else h.debug_flags
     lead = template.lead if template else h.lead

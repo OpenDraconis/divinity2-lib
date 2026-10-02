@@ -1,4 +1,3 @@
-"""Where the game is on this machine."""
 from __future__ import annotations
 
 import os
@@ -6,7 +5,7 @@ import re
 import sys
 from pathlib import Path
 
-FOLDER = "divinity2_dev_cut"                     # Steam's folder under steamapps/common
+FOLDER = "divinity2_dev_cut"
 PROCESS_NAMES = ("Divinity2-debug.exe", "Divinity2.exe")
 VDF_PATH = re.compile(r'"path"\s*"([^"]+)"')
 
@@ -23,7 +22,6 @@ def is_game(path: Path | str | None) -> bool:
 
 
 def packed_of(path: Path | str) -> Path | None:
-    """The folder of archives, given the game folder or that folder itself."""
     for p in (packed(Path(path)), Path(path)):
         if p.is_dir() and any(p.glob("*.dv2")):
             return p
@@ -31,7 +29,6 @@ def packed_of(path: Path | str) -> Path | None:
 
 
 def steam_roots() -> list[Path]:
-    """Every place a Steam install can be on this platform, existing or not."""
     home = Path.home()
     if sys.platform == "win32":
         roots = []
@@ -56,7 +53,6 @@ def steam_roots() -> list[Path]:
 
 
 def steam_libraries() -> list[Path]:
-    """Every `steamapps` directory Steam knows, the roots first."""
     seen: list[Path] = []
     for root in steam_roots():
         apps = root / "steamapps"
@@ -76,7 +72,6 @@ def steam_libraries() -> list[Path]:
 
 
 def find_game() -> Path | None:
-    """`DV2_GAME` when set, else the Developer's Cut in any Steam library."""
     env = os.environ.get("DV2_GAME")
     if env:
         return Path(env) if is_game(env) else None
