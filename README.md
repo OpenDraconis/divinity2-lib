@@ -59,8 +59,8 @@ tree = unpack.plain(binxml.parse(binxml.payload(data)), {}, entry.path)
 
 ## Checked against
 
-The Steam Developer's Cut, with 0.2.0: the engine consults 532 shipped archives
-and 34,857 paths win; 3,972 of the `.xml` files are binary XML and 124 are
+The Steam Developer's Cut, with 0.2.0: the engine consults 533 shipped archives
+and 35,079 paths win; 3,972 of the `.xml` files are binary XML and 124 are
 plain text; the name table holds 1,146 names, and 49 hashes in the shipped
 documents are still unnamed.
 Both shipped initial savegames, read, written through JSON and read again, give the same

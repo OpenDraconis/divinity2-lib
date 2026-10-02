@@ -5,11 +5,16 @@ order it names them in is the search order:
 
     grep -a -o 'Win32\\Packed\\[ -~]*\.dv2' <game>/bin/Divinity2-debug.exe
 
+`CSoundBankManager::Init` @86d860 mounts one more, `Soundbanks.dv2`, before it
+loads `Init.bnk`; the executable spells it `"Win32"` + `"\\Packed\\Soundbanks.dv2"`,
+so the grep above misses it. It is searched after the 31; of its 223 paths one
+is in another archive, byte-identical (`RS_BV2_Main.bnk`, `Episode_1_Extended/Dialogs.dv2`).
+
 512 more archives sit under `World/<Region>/...` and `Episode_*/` and are
-searched after the 31. Among them no XML path appears twice with different
+searched after those. Among them no XML path appears twice with different
 content, so they are sorted by path. The first archive that holds a path
 serves it -- per path, not per archive: `Patch.dv2` overrides region files,
-and 1,824 of the 34,857 paths are in more than one archive.
+and 1,824 of the 35,079 paths are in more than one archive.
 """
 from __future__ import annotations
 
@@ -38,6 +43,9 @@ LOAD_ORDER: tuple[str, ...] = (
 #: mod, and a mod is not the game.
 MOD_SLOTS: tuple[str, ...] = tuple(n for n in LOAD_ORDER[:12] if n != "Patch.dv2")
 
+#: The sound archive, mounted by `CSoundBankManager::Init` @86d860.
+SOUNDBANKS = "Soundbanks.dv2"
+
 
 @dataclass(frozen=True)
 class Entry:
@@ -60,6 +68,7 @@ def archives(packed: Path, *, shipped: bool = True) -> list[Path]:
     """
     out = [packed / n for n in LOAD_ORDER
            if (packed / n).exists() and not (shipped and n in MOD_SLOTS)]
+    out += [packed / SOUNDBANKS] if (packed / SOUNDBANKS).exists() else []
     out += sorted(p for p in packed.rglob("*.dv2") if p.parent != packed)
     return out
 

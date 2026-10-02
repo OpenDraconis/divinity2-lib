@@ -3,7 +3,12 @@
 A bank is a row of chunks, each a four-byte tag and a 32-bit size. `BKHD` is the header,
 `DIDX` indexes the media that `DATA` holds, `HIRC` holds the objects (sounds, containers,
 actions, events), `STID` names banks. Every other chunk (`STMG`, `FXPR`, `ENVS`, only in
-`Init.bnk`) is kept as its bytes.
+`Init.bnk`) is kept as its bytes; `STMG`'s leading field, the volume threshold below which a
+voice is under Wwise's below-threshold behaviour, is also decoded (`Bank.volume_threshold_db`):
+`CAkBankMgr::ProcessGlobalSettingsChunk` @dbebb0 reads it first, in dB, and passes it to
+`AK::SoundEngine::SetVolumeThresholdInternal` @d8b510 at priority 2 (bank data), which nothing
+in the game overrides (`SetVolumeThreshold` @d8c970 is never called outside that one path).
+Measured, `Init.bnk`'s is -96.3, `SetVolumeThresholdInternal`'s own valid range's low end.
 
 The readers are the engine's own, from `Divinity2GUP.pdb`: `CAkBankMgr::ProcessBankHeader`
 @dbb7b0, `CAkBankMgr::LoadMediaIndex` @dbbc30, `CAkBankMgr::LoadSource` @dbc790,
@@ -100,6 +105,7 @@ class Bank:
     objects: dict[int, dict] = field(default_factory=dict)
     bank_names: dict[int, str] = field(default_factory=dict)
     other: dict[str, bytes] = field(default_factory=dict)
+    volume_threshold_db: float | None = None
 
     def events(self) -> dict[int, dict]:
         return {i: o for i, o in self.objects.items() if o["type"] == "Event"}
@@ -160,6 +166,10 @@ def read(data: bytes) -> Bank:
             for _ in range(r.u32()):
                 i = r.u32()
                 bank.bank_names[i] = r.raw(r.u8()).decode("latin-1")
+        elif tag == "STMG":
+            bank.other[tag] = raw = r.raw(size)
+            if len(raw) >= 4:
+                bank.volume_threshold_db = struct.unpack_from("<f", raw)[0]
         else:
             bank.other[tag] = r.raw(size)
         if r.pos != end:
@@ -198,18 +208,49 @@ def _source(r: _Reader, version: int) -> dict:
     return s
 
 
+COMPRESSOR_FX, PEAK_LIMITER_FX = 0x6C0003, 0x6E0003
+
+
+def _fx_params(kind: int, raw: bytes) -> dict | None:
+    """The Wwise Compressor's and Peak Limiter's own params block, both 22 bytes, plugin IDs
+    `COMPRESSOR_FX`/`PEAK_LIMITER_FX` (`AkPluginType_id`, the low 16 bits of `fx`):
+    `CAkCompressorFXParams::SetParamsBlock` @d94ec0, `CAkPeakLimiterFXParams::SetParamsBlock`
+    @d93f70 read threshold, ratio, attack (compressor) or look-ahead (limiter), release, an output
+    gain in dB (raised to linear by the engine, `10**(dB/20)`, at load, not read here), then
+    `bProcessLFE` and `bChannelLink`."""
+    if kind not in (COMPRESSOR_FX, PEAK_LIMITER_FX) or len(raw) < 22:
+        return None
+    threshold, ratio, third, release, output_gain_db = struct.unpack_from("<5f", raw)
+    p = {"threshold": threshold, "ratio": ratio, "release": release,
+         "output_gain_db": output_gain_db, "process_lfe": raw[20] != 0, "channel_link": raw[21] != 0}
+    p["attack" if kind == COMPRESSOR_FX else "look_ahead"] = third
+    return p
+
+
+def _fx_list(r: _Reader, bank: Bank, count: int) -> list[dict]:
+    """The per-effect list `CAkParameterNodeBase::SetNodeBaseParams` @e07ef0 and `CAkBus::
+    SetInitialFxParams` (wwiser's `CAkBus__SetInitialFxParams`, called `#046>=`: absent below that
+    version) share."""
+    fx = []
+    for _ in range(count):
+        e = {"index": r.u8(), "fx": r.u32(), "rendered": r.u8() != 0}
+        e["params"] = r.raw(r.u32())
+        if bank.version >= 47:
+            e["bank_data"] = [r.take("2I") for _ in range(r.u32())]
+        params = _fx_params(e["fx"], e["params"])
+        if params is not None:
+            e["decoded"] = params
+        fx.append(e)
+    return fx
+
+
 def _node_base(r: _Reader, bank: Bank) -> dict:
     """`CAkParameterNodeBase::SetNodeBaseParams` @e07ef0 and the readers it calls in order."""
     n = {"override_fx": r.u8() != 0, "fx": []}
     count = r.u8()
     if count:
         n["fx_bypass"] = r.u8()
-        for _ in range(count):
-            fx = {"index": r.u8(), "fx": r.u32(), "rendered": r.u8() != 0}
-            fx["params"] = r.raw(r.u32())
-            if bank.version >= 47:
-                fx["bank_data"] = [r.take("2I") for _ in range(r.u32())]
-            n["fx"].append(fx)
+        n["fx"] = _fx_list(r, bank, count)
     n["override_bus"], n["parent"] = r.u32(), r.u32()
     n["priority"], n["priority_override_parent"] = r.s8(), r.u8() != 0
     n["priority_apply_dist_factor"], n["priority_dist_offset"] = r.u8() != 0, r.s8()
@@ -370,5 +411,41 @@ def _attenuation(r, o, bank):
     o["rtpc"] = _rtpcs(r)
 
 
-_BODIES = {2: _sound, 3: _action, 4: _event, 5: _ranseq, 7: _actor_mixer, 9: _layer_cntr,
+def _bus(r, o, bank):
+    """`CAkBus::SetInitialValues` @df5b40. Not `CAkParameterNodeBase::SetNodeBaseParams`: a bus has its
+    own, older, shorter field order (wwiser's `CAkBus__SetInitialValues`/`CAkBus__SetInitialParams`,
+    version gates `<=53`/`<=48`, both this bank's versions 44 and 48 satisfy). `duck` and `to_duck` are
+    `CAkBus::AddDuck` @df5aa0's five arguments per entry (bus, dB, fade-out ms, fade-in ms, curve): what
+    playing a voice through this bus does to another's volume, while it does
+    (`CAkBus::Duck`/`UpdateDuckedBus` @df5ea0/@df5fc0). Measured against all 14 `Bus` objects of
+    `Init.bnk` (the only bank that has any): every one reads to exactly its size.
+    """
+    o["override_bus"] = r.u32()
+    o["volume"], o["lfe"], o["pitch"], o["lpf"] = r.f32(), r.f32(), r.f32(), r.f32()
+    o["kill_newest"] = r.u8() != 0
+    o["max_instances"] = r.u16()
+    o["max_instances_override_parent"] = r.u8() != 0
+    o["priority_apply_dist_factor"], o["priority_override_parent"] = r.u8(), r.u8()
+    o["state_group"] = r.u32()
+    o["recovery_time"] = r.s32()
+    o["max_duck_volume"] = r.f32()
+    o["state_sync_type"] = r.u32()
+    o["ducks"] = [{"bus": r.u32(), "volume": r.f32(), "fade_out": r.s32(), "fade_in": r.s32(),
+                   "curve": CURVES.get(c := r.u8(), c)} for _ in range(r.u32())]
+    o["fx"] = []
+    if bank.version >= 46:
+        count = r.u8()
+        if count:
+            o["fx_bypass"] = r.u8()
+            o["fx"] = _fx_list(r, bank, count)
+    o["rtpc"] = _rtpcs(r)
+    o["states"] = [{"state": r.u32(), "custom": r.u8(), "state_instance": r.u32()}
+                   for _ in range(r.u32())]
+    if bank.feedback:
+        o["feedback_bus"] = r.u32()
+        if o["feedback_bus"]:
+            o["feedback"] = r.take("3f"), r.take("3f")
+
+
+_BODIES = {2: _sound, 3: _action, 4: _event, 5: _ranseq, 7: _actor_mixer, 8: _bus, 9: _layer_cntr,
            14: _attenuation}
