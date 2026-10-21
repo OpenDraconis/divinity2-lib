@@ -19,3 +19,4 @@
 - [osiris.md](../engine/osiris.md): the Osiris story
 - [savegame.md](../engine/savegame.md): the savegame container and the engine state in it
 - [wwise.md](../engine/wwise.md): Wwise sound banks
+- [gfx.md](../engine/gfx.md): Scaleform UI movies
