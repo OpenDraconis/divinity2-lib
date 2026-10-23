@@ -57,6 +57,20 @@ python -m dv2lib.savestate round-trip <save.dsg>...
 
 `to-json` and `to-dsg` write only their last argument.
 
+## Kynapse path data
+
+```sh
+python -m dv2lib.kynapse info <file.hpd>...
+python -m dv2lib.kynapse round-trip <file.hpd>...
+```
+
+| Command | Does |
+|---|---|
+| `info` | prints, per file, the nodes, edges, path objects and the AI mesh's local maps and cell grid |
+| `round-trip` | reads each file, writes it again and prints `identical` or what differs; exit code 1 when any file differs or is not a `Kynogon HPD` |
+
+`kynapse.read(bytes)` returns the graph (`slots[0].nodes`, `.edges`) and its AI mesh (`.mesh.columns[...].maps`); `kynapse.write(hpd)` returns a `Canvas` whose `data` is the file and whose `uncovered()` lists bytes no field wrote.
+
 ## Library
 
 ```python
