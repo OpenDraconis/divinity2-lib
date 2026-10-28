@@ -92,6 +92,7 @@ tree = unpack.plain(binxml.parse(binxml.payload(data)), {}, entry.path)
 | [savegame](../dv2lib/savegame.py) | `read_header`, `check`, `split`, `story_span`, `story_of`, `pack`, `rebuild`, `transplant`, `checksum` |
 | [savestate](../dv2lib/savestate.py) | `read`, `write`, `to_json`, `from_json`, `round_trip` |
 | [wwise](../dv2lib/wwise.py) | `read(data)` returns a `Bank` (`media`, `objects`, `events()`, `volume_threshold_db`); `id_of(name)`; `WwiseError` |
+| [gfx](../dv2lib/gfx.py) | `read(data)` returns a `Movie` (header fields, `tags` in file order as `Tag(code, name, raw, fields)` with every tag decoded, sprites' `fields['tags']` nested, actions as records; `of(name)`, `exporter_info`, `external_images`, `external_gradients`, `imports`); `GfxError` |
 | [dialog](../dv2lib/dialog.py) | `packs(episode, name, language="English")` |
 | [unpack](../dv2lib/unpack.py) | `unpack(packed, out, progress)`; `progress(done, total)` is called per file and raising in it stops |
 | [locate](../dv2lib/locate.py) | `find_game`, `is_game`, `packed_of`, `steam_libraries` |
