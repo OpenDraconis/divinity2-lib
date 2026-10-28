@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import dataclasses
+import base64
 import struct
 import zlib
 from dataclasses import dataclass
@@ -38,6 +39,9 @@ class Header:
     position: tuple[float, float, float]
     episode: str
     zlib_length: int
+    screenshot: str = ""
+    screenshot_width: float = 0.0
+    screenshot_height: float = 0.0
 
 
 class _Reader:
@@ -69,13 +73,27 @@ def read_header(data: bytes) -> tuple[Header, int]:
     h.position = struct.unpack_from("<fff", data, r.q)
     r.q += 12
     h.episode = r.string()
-    if data[r.q:r.q + 6] != TAIL:
-        raise SaveError(f"unexpected bytes {data[r.q:r.q + 6].hex()} after the episode name")
-    r.q += 6
+    if data[r.q:r.q + 2] != TAIL[:2]:
+        raise SaveError(f"unexpected bytes {data[r.q:r.q + 2].hex()} after the episode name")
+    r.q += 2
+    _read_screenshot(r, h)
     h.zlib_length = r.u32()
     if h.zlib_length != len(data) - r.q:
         raise SaveError(f"zlib length {h.zlib_length} does not fit {len(data) - r.q} bytes")
     return h, r.q
+
+
+# CRpgStats_V2_LoadSaveEntry::SaveLoadScreenshotData @6e32b0 dc
+def _read_screenshot(r: _Reader, h: Header) -> None:
+    size = r.u32()
+    if size:
+        h.screenshot_width, h.screenshot_height = struct.unpack_from("<ff", r.d, r.q)
+        r.q += 8
+        n = r.u32()
+        if n != size or n > len(r.d) - r.q:
+            raise SaveError(f"invalid screenshot size {n} at offset {r.q - 4}")
+        h.screenshot = base64.b64encode(r.d[r.q:r.q + n]).decode()
+        r.q += n
 
 
 _SIGNED = [b - 256 if b > 127 else b for b in range(256)]
@@ -103,11 +121,12 @@ def split(data: bytes) -> tuple[bytes, bytes]:
     return data[:at], zlib.decompress(data[at:])
 
 
-def story_span(stream: bytes) -> tuple[int, int, bytes]:
+# COsirisManager::GameSaveLoad @736f10 dc
+def story_span(stream: bytes, objects: bool = True) -> tuple[int, int, bytes]:
     s = stream.find(SECTION)
     if s < 0:
         raise SaveError("no SaveLoadStory section")
-    q = s + len(SECTION) + 1 + 4 + 4
+    q = s + len(SECTION) + 1 + 4 + (4 if objects else 0)
     start, parts = q, []
     while True:
         a, n = struct.unpack_from("<II", stream, q)
@@ -121,7 +140,7 @@ def story_span(stream: bytes) -> tuple[int, int, bytes]:
 
 
 def story_of(data: bytes) -> bytes:
-    return story_span(split(data)[1])[2]
+    return story_span(split(data)[1], bool(read_header(data)[0].saveload_objects))[2]
 
 
 def blocks(story: bytes) -> bytes:
@@ -138,7 +157,14 @@ def header_bytes(h: Header) -> bytes:
             + struct.pack("<IIIQ", h.major, h.minor, h.language, h.time) + s(h.description)
             + struct.pack("<IBB", h.type, h.compressed, h.saveload_objects)
             + s(h.region) + s(h.subregion) + s(h.timesettings) + struct.pack("<3f", *h.position)
-            + s(h.episode) + TAIL + bytes(4))
+            + s(h.episode) + TAIL[:2] + _screenshot_bytes(h) + bytes(4))
+
+
+# CRpgStats_V2_LoadSaveEntry::SaveLoadScreenshotData @6e32b0 dc
+def _screenshot_bytes(h: Header) -> bytes:
+    b = base64.b64decode(h.screenshot)
+    return (struct.pack("<IffI", len(b), h.screenshot_width, h.screenshot_height, len(b)) + b
+            if b else bytes(4))
 
 
 def pack(header: bytes, stream: bytes) -> bytes:
@@ -154,7 +180,7 @@ def pack(header: bytes, stream: bytes) -> bytes:
 
 def rebuild(data: bytes, story: bytes) -> bytes:
     header, stream = split(data)
-    start, end, _ = story_span(stream)
+    start, end, _ = story_span(stream, bool(read_header(data)[0].saveload_objects))
     stream = stream[:start] + blocks(story) + stream[end:]
     return pack(header, struct.pack("<I", len(stream) - 4) + stream[4:])
 
