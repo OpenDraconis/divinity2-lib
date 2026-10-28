@@ -50,6 +50,7 @@ class Visitor:
 
     def raw(self, n: int, b: bytes = b"") -> bytes:
         if self.reading:
+            self.check_count(n)
             b = bytes(self.d[self.q:self.q + n])
             self.q += n
             return b
@@ -115,10 +116,19 @@ class Visitor:
 
     # CRpgStats_V2_LoadBinaryVisitor::GetSetAmountOfChildren @98b7a0 decomp
     def count(self, seq) -> int:
-        return self.uint(len(seq))
+        at = self.q
+        n = self.uint(len(seq))
+        self.check_count(n, at)
+        return n
+
+    def check_count(self, n: int, at=None) -> None:
+        if self.reading and (n < 0 or n > len(self.d) - self.q):
+            raise StateError(f"count {n} exceeds bytes left at offset {self.q if at is None else at}")
 
     def each(self, seq, counter=None) -> list:
+        at = self.q
         n = self.count(seq) if counter is None else counter(len(seq))
+        self.check_count(n, at)
         return [ABSENT] * n if self.reading else list(seq)
 
     def many(self, seq, kind: str, counter=None) -> list:
@@ -137,6 +147,7 @@ class Visitor:
 
 
 def _fixed(v: Visitor, seq, n: int, kind: str) -> list:
+    v.check_count(n)
     return [getattr(v, kind)(seq[i]) for i in range(n)]
 
 
@@ -236,65 +247,128 @@ def pc_user_interface(v: Visitor, d) -> dict:
     return {"InventoryPosHelpers": out}
 
 
-def _empty_list(v: Visitor, seq, what: str, reader: str) -> list:
-    n = v.count(seq)
-    if n:
-        raise StateError(f"{what}: {n} elements; the element layout ({reader}) is not read yet")
-    return []
-
-
-# CDialogLogManager::GameSaveLoad @9187c0 decomp
+# CDialogLogManager::GameSaveLoad @816dd0 dc
 def dialog_logs(v: Visitor, d) -> dict:
     v.begin()
-    return {"CurrentTime": v.float(d["CurrentTime"]),
-            "Entries": _empty_list(v, d["Entries"], "DialogLogs",
-                                   "DC 816f5a: TimeStamp, Locutor, Owner, Text, bIsNew, [2.25] bool")}
+    out = {"CurrentTime": v.float(d["CurrentTime"]), "Entries": []}
+    for e in v.each(d["Entries"]):
+        rec = v.record(e, **{"#d8198334": "float", "#e4784588": "string", "#05d8b24b": "string",
+                            "Text": "string", "#ea02f348": "bool"})
+        if v.since(2, 25):
+            rec["#00000000"] = v.bool(e["#00000000"])
+        out["Entries"].append(rec)
+    return out
 
 
-# CRpgStats_V2_QuestManager::GameSaveLoad @96f3f0 decomp
+# CRpgStats_V2_QuestManager::GameSaveLoad @8aa3f0 dc, CRpgStats_V2_Quest::GameSaveLoad @8a9910 dc
 def quests(v: Visitor, d) -> dict:
     v.begin()
-    return {"Quests": _empty_list(v, d["Quests"], "Quests", "DC 8aa542: PrototypeName, Handle, Quest 8a9ef0")}
+    out = []
+    for r in v.each(d["Quests"]):
+        rec = v.record(r, PrototypeName="string", **{"#af0cbf8c": "int"})
+        if rec["#af0cbf8c"] != -1 and rec["PrototypeName"]:
+            v.begin()
+            rec["#12e4a2e2"] = v.string(r["#12e4a2e2"])
+            if v.since(2, 25):
+                rec["#00000000"] = v.bool(r["#00000000"])
+        out.append(rec)
+    return {"Quests": out}
 
 
+# CRpgStats_V2_LoadSaveManager::GameSaveLoadRegionCache @84f190 dc, CRpgStats_V2_LoadSaveManager::GameSaveLoadCacheData @84eba0 dc, CRpgStats_V2_LoadSaveManager::SCacheMemoryData::GameSaveLoad @847e70 dc
 def region_cache(v: Visitor, d) -> dict:
     v.begin()
-    if d["Cache"]:
-        raise StateError("RegionCache: the cache data (GameSaveLoadCacheData DC 84eba0) is not read yet")
-    end = v.record({"RegionName": "", "SubRegionName": "", "CacheSize": 0},
-                   RegionName="string", SubRegionName="string", CacheSize="uint")
-    if end["CacheSize"]:
-        raise StateError(f"RegionCache {end}: the cache data (GameSaveLoadCacheData DC 84eba0) is not read yet")
-    return {"Cache": []}
+    out = v.record(d, RegionName="string", SubRegionName="string", **{"#c03439af": "uint"})
+    n = out["#c03439af"]
+    v.check_count(n)
+    out["Cache"] = []
+    if n:
+        for i in range(4):
+            group = d["Cache"][i]
+            records = None
+            if v.bool(group is not None):
+                records = []
+                for j in range(n):
+                    r = group[j]
+                    rec = {"#c0315815": v.string(r["#c0315815"]),
+                           "#00000000": _fixed(v, r["#00000000"], 2, "uint")}
+                    b = _unb64(r["#6a90aba8"])
+                    size = v.uint(len(b))
+                    v.check_count(size)
+                    rec["#6a90aba8"] = base64.b64encode(v.buffer(size, b)).decode()
+                    records.append(rec)
+            out["Cache"].append(records)
+    return out
 
 
-# CGameLogic_Projectile_Manager::GameSaveLoad @8b8840 decomp
+# CGameLogic_Projectile_Manager::GameSaveLoad @7d35a0 dc, CGameLogic_Projectile::GameSaveLoad @8f01f0 dc
 def projectiles(v: Visitor, d) -> dict:
     v.begin()
-    return {"Projectiles": _empty_list(v, d["Projectiles"], "Projectiles", "DC 7d3658: Handle, Projectile 8f01f0")}
+    out = []
+    for r in v.each(d["Projectiles"]):
+        rec = {"#af0cbf8c": v.int(r["#af0cbf8c"])}
+        if rec["#af0cbf8c"] != -1:
+            rec.update(v.record(r, **{
+                "#39e43414": "float", "#26582c7b": "float", "#ac86195d": "float",
+                "MagicalDamage": "float", "RangedDamage": "float", "#270a759c": "float",
+                "#43863bc9": "bool", "#f0652c21": "int", "#1a05cf2b": "int",
+                "ExplodeAtEnd": "bool", "ExplosionRadius": "float", "#9ffddc22": "bool",
+                "#bbc38556": "float", "#0129e873": "int", "#499aff9e": "int", "#d5948edd": "int",
+                "#d21427b3": "string", "#d83d70b0": "string", "#90c39729": "string",
+                "#5d40f5b9": "float", "#5d40f5ba": "float", "#5d40f5bb": "float",
+                "#9899f169": "int", "#092aad53": "int", "#4a0d2199": "int",
+                "#1c1c3de7": "string", "#a48f2897": "string"}))
+            rec["Statuses"] = [v.record(s, Status="int", **{
+                "#54b9b24a": "float", "#dc0dadd3": "bool", "Chance": "int"}) for s in v.each(r["Statuses"])]
+            rec["#00000000"] = [_fixed(v, r["#00000000"][i], n, "float")
+                                 for i, n in enumerate((13, 3, 3, 3))]
+            rec["Avoid"] = [v.record(a, **{"#d6a08675": "int", "#e32ab55f": "int"})
+                            for a in v.each(r["Avoid"])]
+            rec["EnchantmentUUID"] = v.string(r["EnchantmentUUID"])
+        out.append(rec)
+    return {"Projectiles": out}
 
 
-# CRpgStats_V2_GameEventManager::GameSaveLoad @897120 decomp
+# CRpgStats_V2_GameEventManager::GameSaveLoad @7b6336 dc
 def game_events(v: Visitor, d) -> dict:
     v.begin()
-    return {"Events": _empty_list(v, d["Events"], "GameEvents", "DC 7b6336: argument descriptions")}
+    out = []
+    for e in v.each(d["Events"]):
+        rec = {"#00000000": v.uint(e["#00000000"]), "Arguments": []}
+        for a in v.each(e["Arguments"]):
+            kind = v.int(a["#00000000"][0])
+            value = getattr(v, {1: "int", 2: "float", 3: "string"}.get(kind & 255, "uint"))(a["#00000000"][1])
+            rec["Arguments"].append({"#00000000": [kind, value]})
+        out.append(rec)
+    return {"Events": out}
 
 
-# CGameLogic_DialogControl::GameSaveLoad @802040 decomp
+# CGameLogic_DialogControl::GameSaveLoad @802040 decomp, CGameLogic_DialogControl::GameSaveLoad @705300 dc
 def dialog_control(v: Visitor, d) -> dict:
     v.begin()
-    return {"Dialogs": _empty_list(v, d["Dialogs"], "DialogControl", "GUP 802040: 2 strings, int, 2 floats, bool")}
+    return {"Dialogs": [{"#00000000": [getattr(v, kind)(r["#00000000"][i])
+                                      for i, kind in enumerate(("string", "string", "int", "float", "float", "bool"))]}
+                        for r in v.each(d["Dialogs"])]}
 
 
-# CRpgStats_V2_EffectArea_Manager::GameSaveLoad @9118e0 decomp
+# CRpgStats_V2_EffectArea_Manager::GameSaveLoad @806da0 dc, CRpgStats_V2_EffectArea::GameSaveLoad @a78d20 dc
 def effect_areas(v: Visitor, d) -> dict:
     v.begin()
     out = []
-    for i, a in enumerate(v.each(d["EffectAreas"])):
+    for a in v.each(d["EffectAreas"]):
         kind = v.int(a["Type"])
+        rec = {"Type": kind}
         if kind:
-            raise StateError(f"EffectArea slot {i}: type {kind}; the area layout (vtable +0x28) is not read yet")
-        out.append({"Type": kind})
+            if kind not in (1, 2, 3):
+                raise StateError(f"effect area {kind} at offset {v.q - 4}: no reader")
+            v.begin()
+            rec.update(v.record(a, **{"#dd390402": "float", "#f8097c2e": "bool", "TickInterval": "float",
+                                     "DamagePerTick": "float", "ExposureTime": "float", "#002854e2": "bool"}))
+            # CRpgStats_V2_EffectArea_Firewall::GameSaveLoad @9edea0 dc
+            if kind == 1:
+                rec["#00000000"] = [v.point3(a["#00000000"][0]), v.matrix3(a["#00000000"][1])]
+                rec.update(v.record(a, **{"#613d1424": "float", "#5f2e977f": "float", "#576803e9": "float"}))
+        out.append(rec)
     return {"EffectAreas": out}
 
 
@@ -318,7 +392,7 @@ def map_coordinates(v: Visitor, d) -> dict:
     return {"Regions": out}
 
 
-# CRpgStats_V2_BattleTower::GameSaveLoad @8fb9d0 decomp
+# CRpgStats_V2_BattleTower::GameSaveLoad @8fb9d0 decomp, CRpgStats_V2_Platform_NecromancersAlcove::GameSaveLoad @9cad60 dc
 def battle_tower(v: Visitor, d) -> dict:
     v.begin()
     out = v.record(d, LastRegion="string", LastSubRegion="string", LastPosition="point3", LastFlyingState="bool")
@@ -334,10 +408,11 @@ def battle_tower(v: Visitor, d) -> dict:
         alcove["SummonedCreatureBonusType"] = v.int(a["SummonedCreatureBonusType"])
     if v.since(1, 0x1A):
         alcove.update(v.record(a, SelectedHead="uint", SelectedBody="uint", SelectedArms="uint", SelectedLegs="uint"))
-        for limb in ("Heads", "Bodies", "Arms", "Legs"):
-            if v.count(a[limb]):
-                raise StateError(f"BattleTower alcove {limb}: the limb layout (DC 9caed0..) is not read yet")
-            alcove[limb] = []
+        alcove["Heads"] = [v.record(h, **{"#5dcf8ade": "int", "#782aa2c2": "int", "#782aa2c3": "int",
+                                        "#110a105a": "int", "#110a105b": "int", "#1206f7a8": "string"})
+                            for h in v.each(a["Heads"])]
+        for limb in ("Bodies", "Arms", "Legs"):
+            alcove[limb] = v.many(a[limb], "int")
     out["NecromancersAlcove"] = alcove
     formulas = lambda f: [v.record(x, name="string", Formula="int") for x in v.each(f)]
     p = d["Platform_9cf9d0"]
@@ -461,6 +536,8 @@ def lua_variables(v: Visitor, d) -> dict:
     for name in ("int", "double", "char*", "int*", "NiPoint3"):
         src = d["Lists"][name]
         lst = v.record(src, RealListSize="int", ListSize="int", RealFreeListSize="int", FreeListSize="int")
+        v.check_count(lst["ListSize"])
+        v.check_count(lst["FreeListSize"])
         if lst["RealListSize"]:
             if name == "char*":
                 lst["Values"] = [v.record(src["Values"][i], uint="uint", chars="string")
@@ -478,6 +555,7 @@ def lua_variables(v: Visitor, d) -> dict:
             out["Tables"].append(None)
             continue
         table = v.record(t, count="int", capacity="int")
+        v.check_count(table["count"])
         slots = []
         for j in range(table["count"]):
             s = t["slots"][j]
@@ -505,6 +583,7 @@ def story(v: Visitor, d) -> dict:
     total = 0
     while True:
         _, n = v.uint(), v.uint()
+        v.check_count(n)
         v.q += n
         total += n
         if n < out["OsirisChunkBuffer"]:
@@ -619,16 +698,18 @@ def dialogs(v: Visitor, d) -> dict:
     return out
 
 
-# CRpgStats_V2_InventoryManager::GameSaveLoad @96ca40 decomp, CRpgStats_V2_Inventory::GameSaveLoad @8c7cc0 decomp
+# CRpgStats_V2_InventoryManager::GameSaveLoad @8a77b0 dc, CRpgStats_V2_Inventory::GameSaveLoad @8c7cc0 decomp
 def inventories(v: Visitor, d) -> dict:
     v.begin()
     out = []
     for r in v.each(d["Inventories"]):
-        rec = v.record(r, Handle="int", PrototypeUUID="string", IsLocal="bool")
-        v.begin()
-        rec.update(v.record(r, PrototypeHandle="int", OwnerType="int", OwnerHandle="int", MaxSlots="int",
-                            MaxEquipmentSlots="int"))
-        rec["Items"] = [v.record(x, Slot="int", Handle="int") for x in v.each(r["Items"])]
+        rec = v.record(r, Handle="int", PrototypeUUID="string")
+        if rec["Handle"] != -1:
+            rec["IsLocal"] = v.bool(r["IsLocal"])
+            v.begin()
+            rec.update(v.record(r, PrototypeHandle="int", OwnerType="int", OwnerHandle="int", MaxSlots="int",
+                                MaxEquipmentSlots="int"))
+            rec["Items"] = [v.record(x, Slot="int", Handle="int") for x in v.each(r["Items"])]
         out.append(rec)
     return {"Inventories": out}
 
@@ -734,6 +815,78 @@ def _stat_collection(v: Visitor, s) -> list:
     return out
 
 
+# CRpgstats_V2_Status::GameSaveLoad @9173c0 dc
+def _status(v: Visitor, s) -> dict:
+    rec = v.record(s, **{"#ba3a1e19": "int", "Duration": "float"})
+    visual = v.bool(s["#00000000"][0])
+    rec.update(v.record(s, **{"#ebad33f8": "int", "Status": "int", "StatusType": "int",
+                             "#dd390402": "float", "#a61e7437": "float", "#f8097c2e": "bool"}))
+    rec["#00000000"] = [visual, v.int(s["#00000000"][1])]
+    rec["#9899f169"] = v.int(s["#9899f169"])
+    return rec
+
+
+# CRpgstats_V2_Status_Manager::GameSaveLoad @9149d0 dc, CRpgstats_V2_Status_Manager::MakeNewStatus @912710 dc
+def statuses(v: Visitor, d) -> dict:
+    v.begin()
+    held = v.each(d["Statuses"])
+    out = {}
+    if not v.since(1, 11):
+        out["StatusHandle"] = v.int(d["StatusHandle"])
+    records = []
+    for s in held:
+        kind = v.int(s if isinstance(s, int) else s["Type"])
+        if kind == 0:
+            records.append(0)
+            continue
+        if not 1 <= kind <= 65:
+            raise StateError(f"status {kind} at offset {v.q - 4}: no reader")
+        v.begin()
+        rec = {"Type": kind, **_status(v, s)}
+        # CRpgstats_V2_Status_Poisoned::GameSaveLoad @a5e230 dc
+        if kind == 7:
+            rec.update(v.record(s, **{"#7c790bbc": "int", "#b44274e5": "int", "#4d70bb44": "float",
+                                     "DamagePerTick": "float", "#e9793934": "float"}))
+        # CRpgstats_V2_Status_Charmed::GameSaveLoad @a6ac90 dc
+        if kind == 6:
+            rec["#a8584f04"] = v.int(s["#a8584f04"])
+            if v.since(1, 32):
+                rec["#00000000"] += [v.int(s["#00000000"][i]) for i in (2, 3)]
+        # CRpgstats_V2_Status_Shielded::GameSaveLoad @983120 dc
+        if kind == 15 and v.since(1, 12):
+            rec["#00000000"] += [v.float(s["#00000000"][i]) for i in (2, 3)]
+        # CRpgStats_V2_Status_DragonSpirit::GameSaveLoad @9834e0 dc, CRpgstats_V2_Status_Healing::GameSaveLoad @a66170 dc, CRpgstats_V2_Status_WizardTowered::GameSaveLoad @a57710 dc
+        if kind in (8, 18, 39):
+            rec["#65589fd1"] = v.float(s["#65589fd1"])
+        # CRpgstats_V2_Status_Bleeding::GameSaveLoad @999550 dc
+        if kind == 21:
+            rec["#1003ee13"] = v.float(s["#1003ee13"])
+        # CRpgstats_V2_Status_Drinking::GameSaveLoad @a68d30 dc, CRpgstats_V2_Status_Rejuvinating::GameSaveLoad @a688d0 dc
+        if kind in (12, 13):
+            rec.update(v.record(s, **{"#102b7b8f": "float", "#83cd79ea": "float"}))
+        # CRpgstats_V2_Status_Eating::GameSaveLoad @a68490 dc
+        if kind == 14:
+            rec.update(v.record(s, **{"#395fb991": "float", "#d828652c": "float"}))
+        # CRpgstats_V2_Status_HideInShadows::GameSaveLoad @a65940 dc
+        if kind == 9:
+            rec.update(v.record(s, **{"#27706fb1": "float", "#fb58eb3f": "float"}))
+        # CRpgstats_V2_Status_Polymorphed::GameSaveLoad @99ade0 dc, CRpgstats_V2_Status_DragonPolymorphed::GameSaveLoad @99a7b0 dc
+        if kind in (10, 11):
+            rec["#0035dbf7"] = v.int(s["#0035dbf7"])
+            if kind == 10:
+                rec["#caae2696"] = v.string(s["#caae2696"])
+            rec["#d4553f3a"] = v.int(s["#d4553f3a"])
+        # CRpgstats_V2_Status_EffectAffected::GameSaveLoad @997eb0 dc
+        if kind == 65:
+            rec.update(v.record(s, **{"#e2a3abf2": "float", "#99957593": "string",
+                                     "#76a44e71": "string", "#7fc374ea": "string"}))
+        # CRpgstats_V2_Status::SaveLoadModifierList @9174e0 dc, CRpgStats_V2_Modifier::GameSaveLoad @985cf0 dc
+        if kind in (22, 23, 24, 25, 26, 41, 44, 45, 46, 47, 48, 49, 50, 51, 52, 53, 54, 55, 56):
+            rec["StatModifiers"] = [_modifier(v, m) for m in v.each(s["StatModifiers"])]
+        records.append(rec)
+    return {**out, "Statuses": records}
+
+
 # CRpgStats_V2_CharacterState::GameSaveLoad @99b810 decomp, CRpgstats_V2_Reputation::GameSaveLoad @a4f4d0 decomp, CRpgstats_V2_Status_Manager::GameSaveLoad @9b05e0 decomp
 def _character_state(v: Visitor, s) -> dict:
     v.begin()
@@ -750,19 +903,42 @@ def _character_state(v: Visitor, s) -> dict:
     v.begin()
     rec["Reputation"] = {"Characters": [v.record(x, Handle="int", Value="int") for x in v.each(rep["Characters"])],
                          "Factions": [v.record(x, Faction="string", Value="int") for x in v.each(rep["Factions"])]}
-    v.begin()
-    held = v.each(s["Statuses"])
-    if not v.since(1, 0xB):
-        rec["StatusHandle"] = v.int(s["StatusHandle"])
-    statuses = []
-    for x in held:
-        status = v.int(x)
-        if status:
-            raise StateError(f"status {status}: its typed record (DC 912710, vtable +0x5c) is not read yet")
-        statuses.append(status)
-    rec["Statuses"] = statuses
+    rec.update(statuses(v, s))
     rec["Timers"] = [v.record(x, Handle="int", Time="float") for x in v.each(s["Timers"])]
     return rec
+
+
+# RpgStats_V2_OsirisControllerExecutor::MoveAndTalkTo::GameSaveLoad @98bcf0 dc, RpgStats_V2_OsirisControllerExecutor::PlayAnimation::GameSaveLoad @98bd20 dc, RpgStats_V2_OsirisControllerExecutor::MoveToTarget::GameSaveLoad @98bd50 dc
+OSIRIS_STATE_FIELDS = {
+    1: {"#092aad53": "int", "#e2bd1b31": "string"},
+    2: {"AnimationName": "string", "#97d40047": "string"},
+    3: {"#092aad53": "int", "#97d40047": "string"},
+    # RpgStats_V2_OsirisControllerExecutor::MoveToTrigger::GameSaveLoad @98bd80 dc
+    4: {"#355bb120": "int", "#97d40047": "string", "#1a26881d": "bool"},
+    # RpgStats_V2_OsirisControllerExecutor::StopFollowing::GameSaveLoad @98bed0 dc, RpgStats_V2_OsirisControllerExecutor::DrawStowWeapon::GameSaveLoad @98bf00 dc
+    6: {}, 7: {"#c50249bb": "int"},
+    # RpgStats_V2_OsirisControllerExecutor::TeleportOoSAndGoTo::GameSaveLoad @98bfd0 dc, RpgStats_V2_OsirisControllerExecutor::LeadToLocation::GameSaveLoad @98bf40 dc
+    8: {"#092aad53": "int", "#97d40047": "string"},
+    9: {"#092aad53": "int", "#355bb120": "int", "#97d40047": "string", "#1a26881d": "bool"},
+}
+
+
+# RpgStats_V2_OsirisControllerExecutor::KeepFollowing::GameSaveLoad @98be00 dc
+def osiris_ai(v: Visitor, d) -> dict:
+    if not v.bool(d["HaveState"]):
+        return {"HaveState": False}
+    s = d["State"]
+    kind = v.int(s["Type"])
+    rec = {"Type": kind}
+    if kind == 5:
+        rec["#00000000"] = [v.int(s["#00000000"][0])]
+        if v.since(1, 40):
+            rec["#00000000"] += [v.float(s["#00000000"][i]) for i in (1, 2, 3)]
+    elif kind in OSIRIS_STATE_FIELDS:
+        rec.update(v.record(s, **OSIRIS_STATE_FIELDS[kind]))
+    else:
+        raise StateError(f"Osiris AI state {kind} at offset {v.q - 4}: no reader")
+    return {"HaveState": True, "State": rec}
 
 
 # CRpgStats_V2_Character::GameSaveLoadAIController @830c50 decomp
@@ -773,9 +949,7 @@ def _ai_controller(v: Visitor, c, kind: int) -> dict | None:
         return {**v.record(c, BusyInScript="bool", ProcessingEvent="bool", ProcessedEvent="string"),
                 "Events": v.many(c["Events"], "string")}
     if kind == 3:
-        if v.bool(c["HaveState"]):
-            raise StateError(f"Osiris AI state {v.int()}: its typed record (DC 98cb50, vtable +0x14) is not read yet")
-        return {"HaveState": False}
+        return osiris_ai(v, c)
     if kind == 6:
         return v.record(c, **{name: "bool" for name in ("Stunned", "Cowering", "Blind", "Fleeing", "Polymorphed",
                                                         "Confused", "Awed", "Retreating", "Dying", "Assembling",
@@ -867,6 +1041,43 @@ def fortresses(v: Visitor, d) -> dict:
     return out
 
 
+# CRpgStats_V2_TrapFrame_OpenDoor::GameSaveLoad @a7b660 dc, CRpgStats_V2_TrapFrame_CloseDoor::GameSaveLoad @a7b550 dc, CRpgStats_V2_TrapFrame_LockDoor::GameSaveLoad @a7b460 dc
+TRAP_COMMAND_FIELDS = {
+    1: {"#c443d3ed": "int"}, 2: {"#c443d3ed": "int"}, 3: {"#c443d3ed": "int"},
+    # CRpgStats_V2_TrapFrame_UnlockDoor::GameSaveLoad @a7b360 dc, CRpgStats_V2_TrapFrame_BreakTrap::GameSaveLoad @a7b1d0 dc, CRpgStats_V2_TrapFrame_UnbreakTrap::GameSaveLoad @a7b040 dc
+    4: {"#c443d3ed": "int"}, 5: {"#dcd41b30": "int"}, 6: {"#dcd41b30": "int"},
+    # CRpgStats_V2_TrapFrame_SetEvent::GameSaveLoad @a7aea0 dc, CRpgStats_V2_TrapFrame_UnsetEvent::GameSaveLoad @a7ad40 dc, CRpgStats_V2_TrapFrame_TriggerPlatform::GameSaveLoad @a7a940 dc
+    7: {"#6c135870": "string"}, 8: {"#6c135870": "string"},
+    9: {"#d87c758f": "point3", "#59d1749c": "float", "#48e07f9e": "int"},
+    # CRpgStats_V2_TrapFrame_ChangeTrapState::GameSaveLoad @a7ab70 dc, CRpgStats_V2_TrapFrame_SpawnNPC::GameSaveLoad @a7a670 dc, CRpgStats_V2_TrapFrame_ShootProjectile::GameSaveLoad @a7a210 dc
+    10: {"#dcd41b30": "int", "#0629104e": "int", "#62be3a24": "bool"},
+    11: {"#28cc4e58": "string", "#07ccbb7b": "string"},
+    12: {"#28cc4e58": "string", "#045f63de": "float", "#6c43616c": "float"},
+    # CRpgStats_V2_TrapFrame_ExecuteFrameOnTrap::GameSaveLoad @a7a000 dc, CRpgStats_V2_TrapFrame_PlayAnimation::GameSaveLoad @a79dc0 dc, CRpgStats_V2_TrapFrame_ApplyStatusEffect::GameSaveLoad @a79b00 dc
+    13: {"#dcd41b30": "int", "#f40a67c1": "int"},
+    14: {"#d1b43340": "string", "#63715e08": "int"},
+    15: {"#a6ee6d82": "int", "#a5b230af": "float", "#96d5d511": "float"},
+}
+
+
+# CRpgStats_V2_TrapScript::GameSaveLoad @98f475 dc, CRpgStats_V2_TrapFrame::GameSaveLoad @a7b820 dc
+def trap_commands(v: Visitor, d) -> dict:
+    out = []
+    for c in v.each(d["Commands"]):
+        kind = v.int(c["Type"])
+        rec = {"Type": kind}
+        if kind:
+            if kind not in TRAP_COMMAND_FIELDS:
+                raise StateError(f"trap command {kind} at offset {v.q - 4}: no reader")
+            v.begin()
+            rec.update(v.record(c, **{"#0c933c43": "bool", "#1c4b202e": "float"}))
+            rec.update(v.record(c, **TRAP_COMMAND_FIELDS[kind]))
+            if kind in (10, 13) and v.since(1, 24):
+                rec["#00000000"] = v.int(c["#00000000"])
+        out.append(rec)
+    return {"Commands": out}
+
+
 # CRpgStats_V2_TrapManager::GameSaveLoad @902150 decomp, CRpgStats_V2_TrapScript::GameSaveLoad @a11740 decomp
 def traps(v: Visitor, d) -> dict:
     v.begin()
@@ -880,8 +1091,7 @@ def traps(v: Visitor, d) -> dict:
             rec.update(v.record(t, unnamed_98f21e="bool", unnamed_98f22e="string", unnamed_98f23e="string"))
         rec["Frames"] = [v.record(f, frameNumber="int", command="int", param1="string", param2="string",
                                   param3="string", param4="string") for f in v.each(t["Frames"])]
-        rec["Commands"] = _empty_list(v, t["Commands"], f"trap {rec['UUID']} commands",
-                                      "DC 98f475: Command, typed record 98dfc0")
+        rec.update(trap_commands(v, t))
         out.append(rec)
     return {"Traps": out}
 
@@ -928,7 +1138,13 @@ def treasures(v: Visitor, d) -> dict:
     return {"Treasures": out}
 
 
+# CRpgStats_V2_LoadSaveEntry::SaveLoadPreMisc @6e28c1 dc
+def developers_cut_protection(v: Visitor, d) -> dict:
+    return v.record(d, **{"#00000000": "int"})
+
+
 READERS = {
+    "SaveLoadPreMisc - Developers Cut Protection": developers_cut_protection,
     "SaveLoadPreMisc - CRpgStats_V2_TrophiesManager": trophies,
     "SaveLoadPreMisc - CRpgStats_V2_TimerManager": timers,
     "SaveLoadPreMisc - CGameLogic_SyncData": sync_data,
