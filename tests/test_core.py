@@ -50,6 +50,19 @@ def test_archive_round_trip(tmp_path):
         assert {e.path: ar.read(e) for e in ar} == files
 
 
+def test_archive_write_reads_back(tmp_path):
+    files = [("Data/a.xml", b"x" * 1000), ("b.bin", b""), ("c.nif", bytes(range(256)) * 300)]
+    p = tmp_path / "t.dv2"
+    assert archive.write(p, files) == 3
+    with archive.Archive(p) as ar:
+        assert archive.check_invariants(ar) == []
+        assert ar.header.data_start % archive.ALIGNMENT == 0
+        assert all(e.offset % archive.ALIGNMENT == 0 for e in ar)
+        assert [(e.path, ar.read(e)) for e in ar] == [("Data\\a.xml", b"x" * 1000), *files[1:]]
+    with pytest.raises(archive.ArchiveError):
+        archive.write(p, [("a", b"1"), ("A", b"2")])
+
+
 def test_archive_refuses(tmp_path):
     p = tmp_path / "v4.dv2"
     p.write_bytes(struct.pack("<I", 4) + b"\0" * 30)

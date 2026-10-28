@@ -32,7 +32,7 @@ dialog log: `CDialogLogManager::GameSaveLoad` @9187c0 (@816dd0 dc) — CDialogLo
 
 quests: `CRpgStats_V2_QuestManager::GameSaveLoad` @96f3f0 (@8aa3f0 dc) — CRpgStats_V2_QuestManager::GameSaveLoad @96f3f0 decomp, CRpgStats_V2_QuestManager::GameSaveLoad @8aa3f0 dc
 
-region cache: `CRpgStats_V2_LoadSaveManager::GameSaveLoadRegionCache` (@84f190 dc), region, sub-region and cache size until a size of 0 — CRpgStats_V2_LoadSaveManager::GameSaveLoadRegionCache @84f190 dc
+region cache: region/subregion strings, uint count, then for nonzero count item/character/inventory/fortress groups; each starts with a stored bool and, when stored, count entries of filename string, two uint version numbers, uint byte size and length-prefixed buffer — CRpgStats_V2_LoadSaveManager::GameSaveLoadRegionCache @84f190 dc, CRpgStats_V2_LoadSaveManager::GameSaveLoadCacheData @84eba0 dc, CRpgStats_V2_LoadSaveManager::SCacheMemoryData::GameSaveLoad @847e70 dc
 
 projectiles: `CGameLogic_Projectile_Manager::GameSaveLoad` @8b8840 (@7d35a0 dc) — CGameLogic_Projectile_Manager::GameSaveLoad @8b8840 decomp, CGameLogic_Projectile_Manager::GameSaveLoad @7d35a0 dc
 
@@ -94,6 +94,34 @@ treasures: `CRpgStats_V2_TreasureManager::GameSaveLoad` @9822a0 (@8beb90 dc): pe
 
 The story is written as blocks of at most 0x400 bytes; `COsiSmartBuf`'s destructor @1087a10 writes the last block only when it is not empty — COsirisManager::GameSaveLoad @80b270 decomp
 
+Dialog logs contain timestamp float, locutor/owner/text strings and a new bool; a second empty-tag bool exists from 2.25 — CDialogLogManager::GameSaveLoad @816f4e dc
+
+Quest slots contain prototype string and handle; a valid slot adds state-name string and, from 2.25, an empty-tag bool — CRpgStats_V2_QuestManager::GameSaveLoad @8aa536 dc, CRpgStats_V2_Quest::GameSaveLoad @8a9910 dc
+
+Projectile handle -1 has no payload; other handles carry scalar fields, sounds, direction, target, effects, status descriptions, scale/translation/matrix transform, source/target/current points, avoid handles and enchantment UUID — CGameLogic_Projectile_Manager::GameSaveLoad @7d3658 dc, CGameLogic_Projectile::GameSaveLoad @8f01f0 dc
+
+Game-event arguments encode an int type followed by int (1), float (2), string (3), otherwise uint — CRpgStats_V2_GameEventManager::GameSaveLoad @7b6336 dc
+
+Waiting dialogs encode two strings, int, two floats and bool, all with empty tags — CGameLogic_DialogControl::GameSaveLoad @705444 dc
+
+Effect-area types 1/2/3 are firewall/fire/poison; all carry TTL, timer, interval, damage, exposure and free fields; firewall adds point3, matrix3 and three dimension floats — CRpgStats_V2_EffectArea_Manager::MakeNewEffectArea @8068e0 dc, CRpgStats_V2_EffectArea::GameSaveLoad @a78d20 dc, CRpgStats_V2_EffectArea_Firewall::GameSaveLoad @9edea0 dc
+
+Alcove heads carry handle, two skills, two skill levels and a class string; bodies/arms/legs carry int handles; the save-entry call disables the alternate string-ID mode — CRpgStats_V2_Platform_NecromancersAlcove::GameSaveLoad @9cad60 dc, CRpgStats_V2_LoadSaveEntry::SaveLoadBattleTower @6e303a dc
+
+Status factory types 1..65 dispatch through vtable +0x5c; every payload includes character handle, duration, visual bool, stack/status/status-type ints, two TTL floats, timer bool, causer handle and target type; charmed relation ints begin at 1.32, shielded floats at 1.12 — CRpgstats_V2_Status_Manager::MakeNewStatus @912710 dc, CRpgstats_V2_Status::GameSaveLoad @9173c0 dc, CRpgstats_V2_Status_Charmed::GameSaveLoad @a6ac90 dc
+
+Osiris executors 1..9 dispatch through vtable +0x14; KeepFollowing adds three empty-tag floats from 1.40 — CRpgStats_V2_Character_AIController_Osiris::CreateExecutor @98cb50 dc, RpgStats_V2_OsirisControllerExecutor::KeepFollowing::GameSaveLoad @98be00 dc
+
+Trap commands 1..15 dispatch through vtable +0x14 and begin with execute-at-start bool and delay float; ChangeTrapState and ExecuteFrameOnTrap add an empty-tag int from 1.24 — CRpgStats_V2_TrapScript::CreateEmptyTrapFrame @98dfc0 dc, CRpgStats_V2_TrapFrame::GameSaveLoad @a7b820 dc, CRpgStats_V2_TrapFrame_ChangeTrapState::GameSaveLoad @a7ab70 dc
+
+The Developer's Cut protection checkpoint contains one empty-tag int from 3.6 — CRpgStats_V2_LoadSaveEntry::SaveLoadPreMisc @6e2886 dc
+
+Inventory slots with handle -1 contain a prototype string and no IsLocal or inventory payload — CRpgStats_V2_InventoryManager::GameSaveLoad @8a7921 dc
+
+Screenshot headers contain uint byte size; nonzero size adds width/height floats and a length-prefixed byte buffer — CRpgStats_V2_LoadSaveEntry::SaveLoadScreenshotData @6e32b0 dc
+
 ## Measured
 
 Both shipped initial savegames read, written through JSON and read again give the same decompressed stream and header (sizes and checksum aside) — `python -m dv2lib.savestate round-trip ~/dv2-extract/Win32/Episodes/Episode_1_Extended/Story/init_savegame.dsg ~/dv2-extract/Win32/Episodes/Episode_2/Story/init_savegame.dsg` from `~/divinity2-lib`
+
+The twelve Developer's Cut saves of `~/dv2-fixtures/bases/` and both shipped episode starts round-trip with no difference — `for f in ~/dv2-fixtures/bases/*.dxg; do systemd-run --user --scope -q -p MemoryMax=4G python -c "import sys; from dv2lib import savestate; print(savestate.round_trip(open(sys.argv[1],'rb').read()))" "$f"; done` from `~/divinity2-lib`

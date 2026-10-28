@@ -41,6 +41,16 @@ It writes, from [unpack.py](../dv2lib/unpack.py):
 
 The result is the extracted copy that the other tools call `DV2_EXTRACT` (`~/dv2-extract`). Exit code 2 means no game or no archives were found.
 
+## Pack an archive
+
+```sh
+python -m dv2lib pack <folder> <out.dv2>
+```
+
+Writes every file under `<folder>` into `<out.dv2>`, at its path relative to `<folder>` (`Win32/Textures/foo.nif`). The layout is `Patch.dv2`'s: zlib level 9, every file and the data 32 KiB aligned ([archive.py](../dv2lib/archive.py) `write`). A path that appears twice, ignoring case, is an error.
+
+Named `DKS_Patch.dv2` in `Data/Win32/Packed`, it is searched before every shipped archive, so its files replace the game's ([search-order.md](../engine/search-order.md)). Delete it to undo.
+
 ## Savegames
 
 ```sh
@@ -85,7 +95,7 @@ tree = unpack.plain(binxml.parse(binxml.payload(data)), {}, entry.path)
 
 | Module | Use |
 |---|---|
-| [archive](../dv2lib/archive.py) | `Archive(path)`: `.entries`, `.read(entry)`; `safe_destination(outdir, path)`; `check_invariants` |
+| [archive](../dv2lib/archive.py) | `Archive(path)`: `.entries`, `.read(entry)`; `write(path, [(name, bytes)])`; `safe_destination(outdir, path)`; `check_invariants` |
 | [corpus](../dv2lib/corpus.py) | `archives(packed, shipped=True)`, `index(packed, want=None, shipped=True)` (lower-cased path to `Entry`), `read`, `read_many`, `find(packed, suffix)`, `owners`, `xml_documents` |
 | [nif](../dv2lib/nif.py) | `parse_header`, `get_block`, `set_block` |
 | [binxml](../dv2lib/binxml.py) | `payload`, `parse`, `build`, `rewrap`, `hash_of`; `Node` with descendant lookup, `child`, `set_attr`, `set_items` |
@@ -96,6 +106,7 @@ tree = unpack.plain(binxml.parse(binxml.payload(data)), {}, entry.path)
 | [savegame](../dv2lib/savegame.py) | `read_header`, `check`, `split`, `story_span`, `story_of`, `pack`, `rebuild`, `transplant`, `checksum` |
 | [savestate](../dv2lib/savestate.py) | `read`, `write`, `to_json`, `from_json`, `round_trip` |
 | [wwise](../dv2lib/wwise.py) | `read(data)` returns a `Bank` (`media`, `objects`, `events()`, `volume_threshold_db`); `id_of(name)`; `WwiseError` |
+| [gfx](../dv2lib/gfx.py) | `read(data)` returns a `Movie` (header fields, `tags` in file order as `Tag(code, name, raw, fields)` with every tag decoded, sprites' `fields['tags']` nested, actions as records; `of(name)`, `exporter_info`, `external_images`, `external_gradients`, `imports`); `GfxError` |
 | [dialog](../dv2lib/dialog.py) | `packs(episode, name, language="English")` |
 | [unpack](../dv2lib/unpack.py) | `unpack(packed, out, progress)`; `progress(done, total)` is called per file and raising in it stops |
 | [locate](../dv2lib/locate.py) | `find_game`, `is_game`, `packed_of`, `steam_libraries` |
