@@ -164,3 +164,22 @@ def test_savestate_write_reads_back():
     data = savestate.write(header, sections, story)
     assert savestate.read(data) == {**sections, "SaveLoadStory": {**sections["SaveLoadStory"], "StoryBytes": 1536}}
     assert savegame.story_of(data) == story
+
+
+def test_kynapse_round_trip():
+    from dv2lib import kynapse
+
+    node = struct.pack("<I3f3I", 101, 1.0, 2.0, 3.0, 0x80000000, 0, 1) + struct.pack("<2I", 7, 1)
+    nodes = node + struct.pack("<I3f3I", 102, 4.0, 2.0, 3.0, 0x80000000, 0, 2) + struct.pack("<2I", 8, 1)
+    edges = struct.pack("<3I", 0x80000000 | 48, 0, 1) + struct.pack("<3I", 0x80000000 | 48, 1, 0)
+    slot = struct.pack("<2I", 2, 2) + nodes + edges
+    desc = struct.pack("<3I", 2, 0, 8) + bytes(36)
+    head = (struct.pack("<3I", 2, 1, 1) + struct.pack("<4f", 0, 0, 0, 0) + desc + bytes(48)
+            + struct.pack("<4I", 36, 12, 0, 0))
+    entry = struct.pack("<I6f5I", 1000, -1, 1, -1, 1, -1, 1, 0, len(slot), 0, 5, 6)
+    data = b"Kynogon HPD\0" + struct.pack("<I", 2) + head + entry + slot
+    hpd = kynapse.read(data)
+    assert [n.unique_id for n in hpd.slots[0].nodes] == [101, 102]
+    assert [(e.p1, e.p2) for e in hpd.slots[0].edges] == [(0, 1), (1, 0)]
+    out = kynapse.write(hpd)
+    assert bytes(out.data) == data and not out.uncovered()

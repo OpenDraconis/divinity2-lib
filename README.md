@@ -9,6 +9,7 @@ building and installing mods is [divinity2-tools](https://github.com/ygalsk/divi
 - binary XML read and written, and the names behind its hashes
 - the Osiris story: read, written, decompiled; savegames and the state they load, read and written
 - Wwise sound banks: the media and the objects
+- Kynapse path data: the `.hpd` graphs and AI meshes, read and written
 - unpacking to named JSON
 
 Python 3.11+ is required. Game data is not included.

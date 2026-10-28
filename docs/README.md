@@ -7,7 +7,7 @@
 
 ## docs
 
-- [usage.md](usage.md): install, `DV2_GAME`, `python -m dv2lib unpack`, `python -m dv2lib.savestate`, the library API
+- [usage.md](usage.md): install, `DV2_GAME`, `python -m dv2lib unpack`, `python -m dv2lib.savestate`, `python -m dv2lib.kynapse`, the library API
 
 ## engine
 
@@ -19,4 +19,5 @@
 - [osiris.md](../engine/osiris.md): the Osiris story
 - [savegame.md](../engine/savegame.md): the savegame container and the engine state in it
 - [wwise.md](../engine/wwise.md): Wwise sound banks
+- [kynapse.md](../engine/kynapse.md): Kynapse path data, the `.hpd` graphs and AI meshes
 - [gfx.md](../engine/gfx.md): Scaleform UI movies
