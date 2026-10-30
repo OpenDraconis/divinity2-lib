@@ -1206,6 +1206,13 @@ RECOVERED_HITS: dict[int, str] = {
     0x14dd7eee: 'CustomAnimations',
     0xedbbac6f: 'ExtraData1',
     0xedbbac70: 'ExtraData2',
+    # RpgStats_V2_OsirisControllerExecutor::LeadToLocation::GameSaveLoad @a0e8f0, RpgStats_V2_OsirisControllerExecutor::MoveAndTalkTo::GameSaveLoad @a0e740, RpgStats_V2_OsirisControllerExecutor::DrawStowWeapon::GameSaveLoad @a0e8b0 decomp
+    0x092aad53: 'TargetHandle',
+    0x355bb120: 'TriggerHandle',
+    0x97d40047: 'TextEvent',
+    0x1a26881d: 'IsRunning',
+    0xe2bd1b31: 'DialogName',
+    0xc50249bb: 'DesiredCombatMode',
 }
 NAMES.update(RECOVERED_HITS)
 
