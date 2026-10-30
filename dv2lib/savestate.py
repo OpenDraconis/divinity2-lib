@@ -316,7 +316,7 @@ def projectiles(v: Visitor, d) -> dict:
                 "#bbc38556": "float", "#0129e873": "int", "#499aff9e": "int", "#d5948edd": "int",
                 "#d21427b3": "string", "#d83d70b0": "string", "#90c39729": "string",
                 "#5d40f5b9": "float", "#5d40f5ba": "float", "#5d40f5bb": "float",
-                "#9899f169": "int", "#092aad53": "int", "#4a0d2199": "int",
+                "#9899f169": "int", "TargetHandle": "int", "#4a0d2199": "int",
                 "#1c1c3de7": "string", "#a48f2897": "string"}))
             rec["Statuses"] = [v.record(s, Status="int", **{
                 "#54b9b24a": "float", "#dc0dadd3": "bool", "Chance": "int"}) for s in v.each(r["Statuses"])]
@@ -910,16 +910,16 @@ def _character_state(v: Visitor, s) -> dict:
 
 # RpgStats_V2_OsirisControllerExecutor::MoveAndTalkTo::GameSaveLoad @98bcf0 dc, RpgStats_V2_OsirisControllerExecutor::PlayAnimation::GameSaveLoad @98bd20 dc, RpgStats_V2_OsirisControllerExecutor::MoveToTarget::GameSaveLoad @98bd50 dc
 OSIRIS_STATE_FIELDS = {
-    1: {"#092aad53": "int", "#e2bd1b31": "string"},
-    2: {"AnimationName": "string", "#97d40047": "string"},
-    3: {"#092aad53": "int", "#97d40047": "string"},
+    1: {"TargetHandle": "int", "DialogName": "string"},
+    2: {"AnimationName": "string", "TextEvent": "string"},
+    3: {"TargetHandle": "int", "TextEvent": "string"},
     # RpgStats_V2_OsirisControllerExecutor::MoveToTrigger::GameSaveLoad @98bd80 dc
-    4: {"#355bb120": "int", "#97d40047": "string", "#1a26881d": "bool"},
+    4: {"TriggerHandle": "int", "TextEvent": "string", "IsRunning": "bool"},
     # RpgStats_V2_OsirisControllerExecutor::StopFollowing::GameSaveLoad @98bed0 dc, RpgStats_V2_OsirisControllerExecutor::DrawStowWeapon::GameSaveLoad @98bf00 dc
-    6: {}, 7: {"#c50249bb": "int"},
+    6: {}, 7: {"DesiredCombatMode": "int"},
     # RpgStats_V2_OsirisControllerExecutor::TeleportOoSAndGoTo::GameSaveLoad @98bfd0 dc, RpgStats_V2_OsirisControllerExecutor::LeadToLocation::GameSaveLoad @98bf40 dc
-    8: {"#092aad53": "int", "#97d40047": "string"},
-    9: {"#092aad53": "int", "#355bb120": "int", "#97d40047": "string", "#1a26881d": "bool"},
+    8: {"TargetHandle": "int", "TextEvent": "string"},
+    9: {"TargetHandle": "int", "TriggerHandle": "int", "TextEvent": "string", "IsRunning": "bool"},
 }
 
 
