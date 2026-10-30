@@ -99,7 +99,7 @@ def test_projectiles():
            '#9ffddc22': True, '#bbc38556': 11.0, '#0129e873': 12, '#499aff9e': 13,
            '#d5948edd': 14, '#d21427b3': 'A', '#d83d70b0': 'B', '#90c39729': 'C',
            '#5d40f5b9': 15.0, '#5d40f5ba': 16.0, '#5d40f5bb': 17.0,
-           '#9899f169': 18, '#092aad53': 19, '#4a0d2199': 20,
+           '#9899f169': 18, 'TargetHandle': 19, '#4a0d2199': 20,
            '#1c1c3de7': 'D', '#a48f2897': 'E',
            'Statuses': [{'Status': 21, '#54b9b24a': 22.0, '#dc0dadd3': True, 'Chance': 23}],
            '#00000000': [[24.0, 25.0, 26.0, 27.0, 28.0, 29.0, 30.0, 31.0, 32.0, 33.0,
@@ -252,15 +252,15 @@ def test_status_modifiers(kind):
 
 # CRpgStats_V2_Character_AIController_Osiris::CreateExecutor @98cb50 dc
 @pytest.mark.parametrize('kind,tail,expected', [
-    (1, '0d000000 01000000 41', {'#092aad53': 13, '#e2bd1b31': 'A'}),
-    (2, '01000000 41 01000000 42', {'AnimationName': 'A', '#97d40047': 'B'}),
-    (3, '0d000000 01000000 41', {'#092aad53': 13, '#97d40047': 'A'}),
-    (4, '0d000000 01000000 41 01', {'#355bb120': 13, '#97d40047': 'A', '#1a26881d': True}),
+    (1, '0d000000 01000000 41', {'TargetHandle': 13, 'DialogName': 'A'}),
+    (2, '01000000 41 01000000 42', {'AnimationName': 'A', 'TextEvent': 'B'}),
+    (3, '0d000000 01000000 41', {'TargetHandle': 13, 'TextEvent': 'A'}),
+    (4, '0d000000 01000000 41 01', {'TriggerHandle': 13, 'TextEvent': 'A', 'IsRunning': True}),
     (5, '0d000000 00009040 0000b040 0000d040', {'#00000000': [13, 4.5, 5.5, 6.5]}),
-    (6, '', {}), (7, '0d000000', {'#c50249bb': 13}),
-    (8, '0d000000 01000000 41', {'#092aad53': 13, '#97d40047': 'A'}),
+    (6, '', {}), (7, '0d000000', {'DesiredCombatMode': 13}),
+    (8, '0d000000 01000000 41', {'TargetHandle': 13, 'TextEvent': 'A'}),
     (9, '0d000000 0e000000 01000000 41 01',
-     {'#092aad53': 13, '#355bb120': 14, '#97d40047': 'A', '#1a26881d': True})])
+     {'TargetHandle': 13, 'TriggerHandle': 14, 'TextEvent': 'A', 'IsRunning': True})])
 def test_osiris_ai(kind, tail, expected):
     section(savestate.osiris_ai, b'\x01' + struct.pack('<i', kind) + bytes.fromhex(tail),
             {'HaveState': True, 'State': {'Type': kind, **expected}})
