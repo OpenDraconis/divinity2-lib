@@ -252,8 +252,8 @@ def dialog_logs(v: Visitor, d) -> dict:
     v.begin()
     out = {"CurrentTime": v.float(d["CurrentTime"]), "Entries": []}
     for e in v.each(d["Entries"]):
-        rec = v.record(e, **{"#d8198334": "float", "#e4784588": "string", "#05d8b24b": "string",
-                            "Text": "string", "#ea02f348": "bool"})
+        rec = v.record(e, **{"TimeStamp": "float", "Locutor": "string", "Owner": "string",
+                            "Text": "string", "bIsNew": "bool"})
         if v.since(2, 25):
             rec["#00000000"] = v.bool(e["#00000000"])
         out["Entries"].append(rec)
@@ -265,10 +265,10 @@ def quests(v: Visitor, d) -> dict:
     v.begin()
     out = []
     for r in v.each(d["Quests"]):
-        rec = v.record(r, PrototypeName="string", **{"#af0cbf8c": "int"})
-        if rec["#af0cbf8c"] != -1 and rec["PrototypeName"]:
+        rec = v.record(r, PrototypeName="string", **{"Handle": "int"})
+        if rec["Handle"] != -1 and rec["PrototypeName"]:
             v.begin()
-            rec["#12e4a2e2"] = v.string(r["#12e4a2e2"])
+            rec["StateName"] = v.string(r["StateName"])
             if v.since(2, 25):
                 rec["#00000000"] = v.bool(r["#00000000"])
         out.append(rec)
@@ -306,8 +306,8 @@ def projectiles(v: Visitor, d) -> dict:
     v.begin()
     out = []
     for r in v.each(d["Projectiles"]):
-        rec = {"#af0cbf8c": v.int(r["#af0cbf8c"])}
-        if rec["#af0cbf8c"] != -1:
+        rec = {"Handle": v.int(r["Handle"])}
+        if rec["Handle"] != -1:
             rec.update(v.record(r, **{
                 "#39e43414": "float", "#26582c7b": "float", "#ac86195d": "float",
                 "MagicalDamage": "float", "RangedDamage": "float", "#270a759c": "float",
@@ -316,7 +316,7 @@ def projectiles(v: Visitor, d) -> dict:
                 "#bbc38556": "float", "#0129e873": "int", "#499aff9e": "int", "#d5948edd": "int",
                 "#d21427b3": "string", "#d83d70b0": "string", "#90c39729": "string",
                 "#5d40f5b9": "float", "#5d40f5ba": "float", "#5d40f5bb": "float",
-                "#9899f169": "int", "#092aad53": "int", "#4a0d2199": "int",
+                "TargetType": "int", "TargetHandle": "int", "#4a0d2199": "int",
                 "#1c1c3de7": "string", "#a48f2897": "string"}))
             rec["Statuses"] = [v.record(s, Status="int", **{
                 "#54b9b24a": "float", "#dc0dadd3": "bool", "Chance": "int"}) for s in v.each(r["Statuses"])]
@@ -362,7 +362,7 @@ def effect_areas(v: Visitor, d) -> dict:
             if kind not in (1, 2, 3):
                 raise StateError(f"effect area {kind} at offset {v.q - 4}: no reader")
             v.begin()
-            rec.update(v.record(a, **{"#dd390402": "float", "#f8097c2e": "bool", "TickInterval": "float",
+            rec.update(v.record(a, **{"TimeToLive": "float", "UseTimer": "bool", "TickInterval": "float",
                                      "DamagePerTick": "float", "ExposureTime": "float", "#002854e2": "bool"}))
             # CRpgStats_V2_EffectArea_Firewall::GameSaveLoad @9edea0 dc
             if kind == 1:
@@ -817,12 +817,12 @@ def _stat_collection(v: Visitor, s) -> list:
 
 # CRpgstats_V2_Status::GameSaveLoad @9173c0 dc
 def _status(v: Visitor, s) -> dict:
-    rec = v.record(s, **{"#ba3a1e19": "int", "Duration": "float"})
+    rec = v.record(s, **{"CharacterHandle": "int", "Duration": "float"})
     visual = v.bool(s["#00000000"][0])
-    rec.update(v.record(s, **{"#ebad33f8": "int", "Status": "int", "StatusType": "int",
-                             "#dd390402": "float", "#a61e7437": "float", "#f8097c2e": "bool"}))
+    rec.update(v.record(s, **{"StackType": "int", "Status": "int", "StatusType": "int",
+                             "TimeToLive": "float", "OriginalTimeToLive": "float", "UseTimer": "bool"}))
     rec["#00000000"] = [visual, v.int(s["#00000000"][1])]
-    rec["#9899f169"] = v.int(s["#9899f169"])
+    rec["TargetType"] = v.int(s["TargetType"])
     return rec
 
 
@@ -845,11 +845,11 @@ def statuses(v: Visitor, d) -> dict:
         rec = {"Type": kind, **_status(v, s)}
         # CRpgstats_V2_Status_Poisoned::GameSaveLoad @a5e230 dc
         if kind == 7:
-            rec.update(v.record(s, **{"#7c790bbc": "int", "#b44274e5": "int", "#4d70bb44": "float",
-                                     "DamagePerTick": "float", "#e9793934": "float"}))
+            rec.update(v.record(s, **{"mCauserHandle": "int", "CauserType": "int", "DamageInterval": "float",
+                                     "DamagePerTick": "float", "TimeSinceLastDamage": "float"}))
         # CRpgstats_V2_Status_Charmed::GameSaveLoad @a6ac90 dc
         if kind == 6:
-            rec["#a8584f04"] = v.int(s["#a8584f04"])
+            rec["FriendHandle"] = v.int(s["FriendHandle"])
             if v.since(1, 32):
                 rec["#00000000"] += [v.int(s["#00000000"][i]) for i in (2, 3)]
         # CRpgstats_V2_Status_Shielded::GameSaveLoad @983120 dc
@@ -857,29 +857,29 @@ def statuses(v: Visitor, d) -> dict:
             rec["#00000000"] += [v.float(s["#00000000"][i]) for i in (2, 3)]
         # CRpgStats_V2_Status_DragonSpirit::GameSaveLoad @9834e0 dc, CRpgstats_V2_Status_Healing::GameSaveLoad @a66170 dc, CRpgstats_V2_Status_WizardTowered::GameSaveLoad @a57710 dc
         if kind in (8, 18, 39):
-            rec["#65589fd1"] = v.float(s["#65589fd1"])
+            rec["AmountToHeal"] = v.float(s["AmountToHeal"])
         # CRpgstats_V2_Status_Bleeding::GameSaveLoad @999550 dc
         if kind == 21:
-            rec["#1003ee13"] = v.float(s["#1003ee13"])
+            rec["AmountToBleed"] = v.float(s["AmountToBleed"])
         # CRpgstats_V2_Status_Drinking::GameSaveLoad @a68d30 dc, CRpgstats_V2_Status_Rejuvinating::GameSaveLoad @a688d0 dc
         if kind in (12, 13):
-            rec.update(v.record(s, **{"#102b7b8f": "float", "#83cd79ea": "float"}))
+            rec.update(v.record(s, **{"AmountToDrink": "float", "TimeToDrink": "float"}))
         # CRpgstats_V2_Status_Eating::GameSaveLoad @a68490 dc
         if kind == 14:
-            rec.update(v.record(s, **{"#395fb991": "float", "#d828652c": "float"}))
+            rec.update(v.record(s, **{"AmountToEat": "float", "TimeToEat": "float"}))
         # CRpgstats_V2_Status_HideInShadows::GameSaveLoad @a65940 dc
         if kind == 9:
-            rec.update(v.record(s, **{"#27706fb1": "float", "#fb58eb3f": "float"}))
+            rec.update(v.record(s, **{"EnduranceCostPerSecond": "float", "AtmosphereIntensity": "float"}))
         # CRpgstats_V2_Status_Polymorphed::GameSaveLoad @99ade0 dc, CRpgstats_V2_Status_DragonPolymorphed::GameSaveLoad @99a7b0 dc
         if kind in (10, 11):
-            rec["#0035dbf7"] = v.int(s["#0035dbf7"])
+            rec["OriginalPrototypeHandle"] = v.int(s["OriginalPrototypeHandle"])
             if kind == 10:
-                rec["#caae2696"] = v.string(s["#caae2696"])
-            rec["#d4553f3a"] = v.int(s["#d4553f3a"])
+                rec["OriginalVisualPrototypeUUID"] = v.string(s["OriginalVisualPrototypeUUID"])
+            rec["FreeHits"] = v.int(s["FreeHits"])
         # CRpgstats_V2_Status_EffectAffected::GameSaveLoad @997eb0 dc
         if kind == 65:
-            rec.update(v.record(s, **{"#e2a3abf2": "float", "#99957593": "string",
-                                     "#76a44e71": "string", "#7fc374ea": "string"}))
+            rec.update(v.record(s, **{"HeightDisplacement": "float", "ImpactParticleName": "string",
+                                     "ActiveParticleName": "string", "EndingParticleName": "string"}))
         # CRpgstats_V2_Status::SaveLoadModifierList @9174e0 dc, CRpgStats_V2_Modifier::GameSaveLoad @985cf0 dc
         if kind in (22, 23, 24, 25, 26, 41, 44, 45, 46, 47, 48, 49, 50, 51, 52, 53, 54, 55, 56):
             rec["StatModifiers"] = [_modifier(v, m) for m in v.each(s["StatModifiers"])]
@@ -910,16 +910,16 @@ def _character_state(v: Visitor, s) -> dict:
 
 # RpgStats_V2_OsirisControllerExecutor::MoveAndTalkTo::GameSaveLoad @98bcf0 dc, RpgStats_V2_OsirisControllerExecutor::PlayAnimation::GameSaveLoad @98bd20 dc, RpgStats_V2_OsirisControllerExecutor::MoveToTarget::GameSaveLoad @98bd50 dc
 OSIRIS_STATE_FIELDS = {
-    1: {"#092aad53": "int", "#e2bd1b31": "string"},
-    2: {"AnimationName": "string", "#97d40047": "string"},
-    3: {"#092aad53": "int", "#97d40047": "string"},
+    1: {"TargetHandle": "int", "DialogName": "string"},
+    2: {"AnimationName": "string", "TextEvent": "string"},
+    3: {"TargetHandle": "int", "TextEvent": "string"},
     # RpgStats_V2_OsirisControllerExecutor::MoveToTrigger::GameSaveLoad @98bd80 dc
-    4: {"#355bb120": "int", "#97d40047": "string", "#1a26881d": "bool"},
+    4: {"TriggerHandle": "int", "TextEvent": "string", "IsRunning": "bool"},
     # RpgStats_V2_OsirisControllerExecutor::StopFollowing::GameSaveLoad @98bed0 dc, RpgStats_V2_OsirisControllerExecutor::DrawStowWeapon::GameSaveLoad @98bf00 dc
-    6: {}, 7: {"#c50249bb": "int"},
+    6: {}, 7: {"DesiredCombatMode": "int"},
     # RpgStats_V2_OsirisControllerExecutor::TeleportOoSAndGoTo::GameSaveLoad @98bfd0 dc, RpgStats_V2_OsirisControllerExecutor::LeadToLocation::GameSaveLoad @98bf40 dc
-    8: {"#092aad53": "int", "#97d40047": "string"},
-    9: {"#092aad53": "int", "#355bb120": "int", "#97d40047": "string", "#1a26881d": "bool"},
+    8: {"TargetHandle": "int", "TextEvent": "string"},
+    9: {"TargetHandle": "int", "TriggerHandle": "int", "TextEvent": "string", "IsRunning": "bool"},
 }
 
 

@@ -18,16 +18,16 @@ def section(reader, data, expected, version=(3, 6)):
 def test_dialog_logs():
     section(savestate.dialog_logs,
             bytes.fromhex('00002041 01000000 0000c03f 01000000 41 01000000 42 01000000 43 01 00'),
-            {'CurrentTime': 10.0, 'Entries': [{'#d8198334': 1.5, '#e4784588': 'A',
-             '#05d8b24b': 'B', 'Text': 'C', '#ea02f348': True, '#00000000': False}]})
+            {'CurrentTime': 10.0, 'Entries': [{'TimeStamp': 1.5, 'Locutor': 'A',
+             'Owner': 'B', 'Text': 'C', 'bIsNew': True, '#00000000': False}]})
 
 
 # CDialogLogManager::GameSaveLoad @816faa dc
 def test_dialog_logs_before_2_25():
     section(savestate.dialog_logs,
             bytes.fromhex('00002041 01000000 0000c03f 01000000 41 01000000 42 01000000 43 01'),
-            {'CurrentTime': 10.0, 'Entries': [{'#d8198334': 1.5, '#e4784588': 'A',
-             '#05d8b24b': 'B', 'Text': 'C', '#ea02f348': True}]}, (2, 24))
+            {'CurrentTime': 10.0, 'Entries': [{'TimeStamp': 1.5, 'Locutor': 'A',
+             'Owner': 'B', 'Text': 'C', 'bIsNew': True}]}, (2, 24))
 
 
 # CRpgStats_V2_LoadBinaryVisitor::GetSetAmountOfChildren @98b7a0 decomp
@@ -54,8 +54,8 @@ def test_dialog_control():
 # CRpgStats_V2_QuestManager::GameSaveLoad @8aa536 dc, CRpgStats_V2_Quest::GameSaveLoad @8a9974 dc
 @pytest.mark.parametrize('version,tail', [((2, 24), b''), ((2, 25), b'\x01')])
 def test_quests(version, tail):
-    expected = {'Quests': [{'PrototypeName': 'Q', '#af0cbf8c': 7, '#12e4a2e2': 'S'},
-                           {'PrototypeName': '', '#af0cbf8c': -1}]}
+    expected = {'Quests': [{'PrototypeName': 'Q', 'Handle': 7, 'StateName': 'S'},
+                           {'PrototypeName': '', 'Handle': -1}]}
     if tail:
         expected['Quests'][0]['#00000000'] = True
     section(savestate.quests, bytes.fromhex('02000000 01000000 51 07000000 01000000 53')
@@ -93,13 +93,13 @@ def test_header_screenshot():
 
 # CGameLogic_Projectile_Manager::GameSaveLoad @7d3658 dc, CGameLogic_Projectile::GameSaveLoad @8f01f0 dc
 def test_projectiles():
-    rec = {'#af0cbf8c': 7, '#39e43414': 1.0, '#26582c7b': 2.0, '#ac86195d': 3.0,
+    rec = {'Handle': 7, '#39e43414': 1.0, '#26582c7b': 2.0, '#ac86195d': 3.0,
            'MagicalDamage': 4.0, 'RangedDamage': 5.0, '#270a759c': 6.0, '#43863bc9': True,
            '#f0652c21': 8, '#1a05cf2b': 9, 'ExplodeAtEnd': False, 'ExplosionRadius': 10.0,
            '#9ffddc22': True, '#bbc38556': 11.0, '#0129e873': 12, '#499aff9e': 13,
            '#d5948edd': 14, '#d21427b3': 'A', '#d83d70b0': 'B', '#90c39729': 'C',
            '#5d40f5b9': 15.0, '#5d40f5ba': 16.0, '#5d40f5bb': 17.0,
-           '#9899f169': 18, '#092aad53': 19, '#4a0d2199': 20,
+           'TargetType': 18, 'TargetHandle': 19, '#4a0d2199': 20,
            '#1c1c3de7': 'D', '#a48f2897': 'E',
            'Statuses': [{'Status': 21, '#54b9b24a': 22.0, '#dc0dadd3': True, 'Chance': 23}],
            '#00000000': [[24.0, 25.0, 26.0, 27.0, 28.0, 29.0, 30.0, 31.0, 32.0, 33.0,
@@ -112,7 +112,7 @@ def test_projectiles():
             + bytes.fromhex('01000000 44 01000000 45')
             + struct.pack('<IifBi22fIii', 1, 21, 22, 1, 23, *range(24, 46), 1, 46, 47)
             + bytes.fromhex('01000000 46 ffffffff'))
-    section(savestate.projectiles, data, {'Projectiles': [rec, {'#af0cbf8c': -1}]})
+    section(savestate.projectiles, data, {'Projectiles': [rec, {'Handle': -1}]})
 
 
 # CRpgStats_V2_GameEventManager::GameSaveLoad @7b6336 dc
@@ -160,15 +160,15 @@ def test_status_base(kind):
     section(savestate.statuses,
             struct.pack('<Iii f B iii ff B ii', 2, kind, 7, 1.5, 1, 8, 9, 10, 2.5, 3.5, 0, 11, 12)
             + bytes(4),
-            {'Statuses': [{'Type': kind, '#ba3a1e19': 7, 'Duration': 1.5, '#00000000': [True, 11],
-                           '#ebad33f8': 8, 'Status': 9, 'StatusType': 10, '#dd390402': 2.5,
-                           '#a61e7437': 3.5, '#f8097c2e': False, '#9899f169': 12}, 0]})
+            {'Statuses': [{'Type': kind, 'CharacterHandle': 7, 'Duration': 1.5, '#00000000': [True, 11],
+                           'StackType': 8, 'Status': 9, 'StatusType': 10, 'TimeToLive': 2.5,
+                           'OriginalTimeToLive': 3.5, 'UseTimer': False, 'TargetType': 12}, 0]})
 
 
 def status_case(kind, suffix, extra, version=(3, 6)):
-    rec = {'Type': kind, '#ba3a1e19': 7, 'Duration': 1.5, '#00000000': [True, 11],
-           '#ebad33f8': 8, 'Status': 9, 'StatusType': 10, '#dd390402': 2.5,
-           '#a61e7437': 3.5, '#f8097c2e': False, '#9899f169': 12, **extra}
+    rec = {'Type': kind, 'CharacterHandle': 7, 'Duration': 1.5, '#00000000': [True, 11],
+           'StackType': 8, 'Status': 9, 'StatusType': 10, 'TimeToLive': 2.5,
+           'OriginalTimeToLive': 3.5, 'UseTimer': False, 'TargetType': 12, **extra}
     section(savestate.statuses,
             struct.pack('<Iii f B iii ff B ii', 1, kind, 7, 1.5, 1, 8, 9, 10, 2.5, 3.5, 0, 11, 12)
             + suffix, {'Statuses': [rec]}, version)
@@ -177,15 +177,15 @@ def status_case(kind, suffix, extra, version=(3, 6)):
 # CRpgstats_V2_Status_Poisoned::GameSaveLoad @a5e230 dc
 def test_status_poisoned():
     status_case(7, struct.pack('<ii3f', 13, 14, 4.5, 5.5, 6.5),
-                {'#7c790bbc': 13, '#b44274e5': 14, '#4d70bb44': 4.5,
-                 'DamagePerTick': 5.5, '#e9793934': 6.5})
+                {'mCauserHandle': 13, 'CauserType': 14, 'DamageInterval': 4.5,
+                 'DamagePerTick': 5.5, 'TimeSinceLastDamage': 6.5})
 
 
 # CRpgstats_V2_Status_Charmed::GameSaveLoad @a6ac90 dc
 @pytest.mark.parametrize('version', [(1, 31), (1, 32)])
 def test_status_charmed(version):
     tail = struct.pack('<i', 13)
-    extra = {'#a8584f04': 13}
+    extra = {'FriendHandle': 13}
     if version >= (1, 32):
         tail += struct.pack('<ii', -2, -3)
         extra['#00000000'] = [True, 11, -2, -3]
@@ -202,45 +202,45 @@ def test_status_shielded(version):
 # CRpgStats_V2_Status_DragonSpirit::GameSaveLoad @9834e0 dc, CRpgstats_V2_Status_Healing::GameSaveLoad @a66170 dc, CRpgstats_V2_Status_WizardTowered::GameSaveLoad @a57710 dc
 @pytest.mark.parametrize('kind', [8, 18, 39])
 def test_status_healing(kind):
-    status_case(kind, struct.pack('<f', 4.5), {'#65589fd1': 4.5})
+    status_case(kind, struct.pack('<f', 4.5), {'AmountToHeal': 4.5})
 
 
 # CRpgstats_V2_Status_Bleeding::GameSaveLoad @999550 dc
 def test_status_bleeding():
-    status_case(21, struct.pack('<f', 4.5), {'#1003ee13': 4.5})
+    status_case(21, struct.pack('<f', 4.5), {'AmountToBleed': 4.5})
 
 
 # CRpgstats_V2_Status_Drinking::GameSaveLoad @a68d30 dc, CRpgstats_V2_Status_Rejuvinating::GameSaveLoad @a688d0 dc
 @pytest.mark.parametrize('kind', [12, 13])
 def test_status_drinking(kind):
-    status_case(kind, struct.pack('<ff', 4.5, 5.5), {'#102b7b8f': 4.5, '#83cd79ea': 5.5})
+    status_case(kind, struct.pack('<ff', 4.5, 5.5), {'AmountToDrink': 4.5, 'TimeToDrink': 5.5})
 
 
 # CRpgstats_V2_Status_Eating::GameSaveLoad @a68490 dc
 def test_status_eating():
-    status_case(14, struct.pack('<ff', 4.5, 5.5), {'#395fb991': 4.5, '#d828652c': 5.5})
+    status_case(14, struct.pack('<ff', 4.5, 5.5), {'AmountToEat': 4.5, 'TimeToEat': 5.5})
 
 
 # CRpgstats_V2_Status_HideInShadows::GameSaveLoad @a65940 dc
 def test_status_hide_in_shadows():
-    status_case(9, struct.pack('<ff', 4.5, 5.5), {'#27706fb1': 4.5, '#fb58eb3f': 5.5})
+    status_case(9, struct.pack('<ff', 4.5, 5.5), {'EnduranceCostPerSecond': 4.5, 'AtmosphereIntensity': 5.5})
 
 
 # CRpgstats_V2_Status_Polymorphed::GameSaveLoad @99ade0 dc
 def test_status_polymorphed():
     status_case(10, bytes.fromhex('0d000000 01000000 41 0e000000'),
-                {'#0035dbf7': 13, '#caae2696': 'A', '#d4553f3a': 14})
+                {'OriginalPrototypeHandle': 13, 'OriginalVisualPrototypeUUID': 'A', 'FreeHits': 14})
 
 
 # CRpgstats_V2_Status_DragonPolymorphed::GameSaveLoad @99a7b0 dc
 def test_status_dragon_polymorphed():
-    status_case(11, struct.pack('<ii', 13, 14), {'#0035dbf7': 13, '#d4553f3a': 14})
+    status_case(11, struct.pack('<ii', 13, 14), {'OriginalPrototypeHandle': 13, 'FreeHits': 14})
 
 
 # CRpgstats_V2_Status_EffectAffected::GameSaveLoad @997eb0 dc
 def test_status_effect_affected():
     status_case(65, bytes.fromhex('00009040 01000000 41 01000000 42 01000000 43'),
-                {'#e2a3abf2': 4.5, '#99957593': 'A', '#76a44e71': 'B', '#7fc374ea': 'C'})
+                {'HeightDisplacement': 4.5, 'ImpactParticleName': 'A', 'ActiveParticleName': 'B', 'EndingParticleName': 'C'})
 
 
 # CRpgstats_V2_Status::SaveLoadModifierList @9174e0 dc, CRpgStats_V2_Modifier::GameSaveLoad @985cf0 dc
@@ -252,15 +252,15 @@ def test_status_modifiers(kind):
 
 # CRpgStats_V2_Character_AIController_Osiris::CreateExecutor @98cb50 dc
 @pytest.mark.parametrize('kind,tail,expected', [
-    (1, '0d000000 01000000 41', {'#092aad53': 13, '#e2bd1b31': 'A'}),
-    (2, '01000000 41 01000000 42', {'AnimationName': 'A', '#97d40047': 'B'}),
-    (3, '0d000000 01000000 41', {'#092aad53': 13, '#97d40047': 'A'}),
-    (4, '0d000000 01000000 41 01', {'#355bb120': 13, '#97d40047': 'A', '#1a26881d': True}),
+    (1, '0d000000 01000000 41', {'TargetHandle': 13, 'DialogName': 'A'}),
+    (2, '01000000 41 01000000 42', {'AnimationName': 'A', 'TextEvent': 'B'}),
+    (3, '0d000000 01000000 41', {'TargetHandle': 13, 'TextEvent': 'A'}),
+    (4, '0d000000 01000000 41 01', {'TriggerHandle': 13, 'TextEvent': 'A', 'IsRunning': True}),
     (5, '0d000000 00009040 0000b040 0000d040', {'#00000000': [13, 4.5, 5.5, 6.5]}),
-    (6, '', {}), (7, '0d000000', {'#c50249bb': 13}),
-    (8, '0d000000 01000000 41', {'#092aad53': 13, '#97d40047': 'A'}),
+    (6, '', {}), (7, '0d000000', {'DesiredCombatMode': 13}),
+    (8, '0d000000 01000000 41', {'TargetHandle': 13, 'TextEvent': 'A'}),
     (9, '0d000000 0e000000 01000000 41 01',
-     {'#092aad53': 13, '#355bb120': 14, '#97d40047': 'A', '#1a26881d': True})])
+     {'TargetHandle': 13, 'TriggerHandle': 14, 'TextEvent': 'A', 'IsRunning': True})])
 def test_osiris_ai(kind, tail, expected):
     section(savestate.osiris_ai, b'\x01' + struct.pack('<i', kind) + bytes.fromhex(tail),
             {'HaveState': True, 'State': {'Type': kind, **expected}})
@@ -306,7 +306,7 @@ def test_trap_commands_before_1_24(kind, tail, extra):
 @pytest.mark.parametrize('kind', [2, 3])
 def test_effect_area(kind):
     section(savestate.effect_areas, struct.pack('<IifBfffBi', 2, kind, 1.5, 1, 2.5, 3.5, 4.5, 0, 0),
-            {'EffectAreas': [{'Type': kind, '#dd390402': 1.5, '#f8097c2e': True,
+            {'EffectAreas': [{'Type': kind, 'TimeToLive': 1.5, 'UseTimer': True,
                               'TickInterval': 2.5, 'DamagePerTick': 3.5, 'ExposureTime': 4.5,
                               '#002854e2': False}, {'Type': 0}]})
 
@@ -315,7 +315,7 @@ def test_effect_area(kind):
 def test_effect_area_firewall():
     section(savestate.effect_areas, struct.pack('<IifBfffB15f', 1, 1, 1.5, 1, 2.5, 3.5, 4.5, 0,
                                                *range(5, 20)),
-            {'EffectAreas': [{'Type': 1, '#dd390402': 1.5, '#f8097c2e': True,
+            {'EffectAreas': [{'Type': 1, 'TimeToLive': 1.5, 'UseTimer': True,
                              'TickInterval': 2.5, 'DamagePerTick': 3.5, 'ExposureTime': 4.5,
                              '#002854e2': False, '#00000000': [[5.0, 6.0, 7.0],
                               [8.0, 9.0, 10.0, 11.0, 12.0, 13.0, 14.0, 15.0, 16.0]],
