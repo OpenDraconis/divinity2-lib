@@ -8,6 +8,7 @@ building and installing mods is [divinity2-tools](https://github.com/ygalsk/divi
 - the engine's archive search order, and which entry wins a path
 - binary XML read and written, and the names behind its hashes
 - the Osiris story: read, written, decompiled; savegames and the state they load, read and written
+- the profile folder's `graphicoptions.xml` and `settings.dv2`, read and written
 - Wwise sound banks: the media and the objects
 - Kynapse path data: the `.hpd` graphs and AI meshes, read and written
 - unpacking to named JSON

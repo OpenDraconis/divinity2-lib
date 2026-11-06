@@ -18,6 +18,7 @@
 - [dialog-packs.md](../engine/dialog-packs.md): the animation packs a dialog loads
 - [osiris.md](../engine/osiris.md): the Osiris story
 - [savegame.md](../engine/savegame.md): the savegame container and the engine state in it
+- [profile-settings.md](../engine/profile-settings.md): `graphicoptions.xml` and `settings.dv2` of the profile folder
 - [wwise.md](../engine/wwise.md): Wwise sound banks
 - [kynapse.md](../engine/kynapse.md): Kynapse path data, the `.hpd` graphs and AI meshes
 - [gfx.md](../engine/gfx.md): Scaleform UI movies

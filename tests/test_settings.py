@@ -86,3 +86,7 @@ def test_profile_keeps_a_string():
 def test_profile_refuses(bad):
     with pytest.raises(settings.SettingsError):
         settings.read_profile(bad(sample()))
+
+
+def test_graphic_attribute_table_is_the_file_order():
+    assert list(settings.read_graphic_options(GRAPHIC_TEXT)) == list(settings.GRAPHIC_ATTRIBUTES)

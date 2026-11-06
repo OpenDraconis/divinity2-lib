@@ -104,6 +104,7 @@ tree = unpack.plain(binxml.parse(binxml.payload(data)), {}, entry.path)
 | [osiris_story](../dv2lib/osiris_story.py), [osiris_write](../dv2lib/osiris_write.py), [osiris_source](../dv2lib/osiris_source.py) | `read_story`; `write_story`, `to_div2`; `Decompiler` |
 | [story](../dv2lib/story.py) | `episodes(packed)`, `load(packed, episode)` |
 | [savegame](../dv2lib/savegame.py) | `read_header`, `check`, `split`, `story_span`, `story_of`, `pack`, `rebuild`, `transplant`, `checksum` |
+| [settings](../dv2lib/settings.py) | `read_graphic_options`, `write_graphic_options` (the attributes of `graphicoptions.xml` in file order, any unknown one kept); `read_profile`, `write_profile` (`ProfileSettings` of `settings.dv2`); `SettingsError` |
 | [savestate](../dv2lib/savestate.py) | `read`, `write`, `to_json`, `from_json`, `round_trip` |
 | [wwise](../dv2lib/wwise.py) | `read(data)` returns a `Bank` (`media`, `objects`, `events()`, `volume_threshold_db`); `id_of(name)`; `WwiseError` |
 | [gfx](../dv2lib/gfx.py) | `read(data)` returns a `Movie` (header fields, `tags` in file order as `Tag(code, name, raw, fields)` with every tag decoded, sprites' `fields['tags']` nested, actions as records; `of(name)`, `exporter_info`, `external_images`, `external_gradients`, `imports`); `GfxError` |
