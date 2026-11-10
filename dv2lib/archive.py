@@ -122,12 +122,15 @@ class Archive:
             entries.append(Entry(name, offset, packed, unpacked))
         return entries
 
-    def read(self, entry: Entry) -> bytes:
+    def raw(self, entry: Entry) -> bytes:
         self._fh.seek(self.header.data_start + entry.offset)
         raw = self._fh.read(entry.packed_size)
         if len(raw) != entry.packed_size:
             raise ArchiveError(f"{entry.path}: truncated (wanted {entry.packed_size} bytes)")
+        return raw
 
+    def read(self, entry: Entry) -> bytes:
+        raw = self.raw(entry)
         if not entry.is_compressed:
             return raw
 
@@ -158,28 +161,49 @@ def _aligned(n: int) -> int:
     return -(-n // ALIGNMENT) * ALIGNMENT
 
 
+def _stored(data: bytes) -> tuple[bytes, int]:
+    return (zlib.compress(data, 9), len(data)) if data else (data, 0)
+
+
 def write(path: Path | str, files: Iterable[tuple[str, bytes]]) -> int:
-    files = [(name.replace("/", "\\"), data) for name, data in files]
+    return _write(path, [(name, *_stored(data)) for name, data in files], aligned=True)
+
+
+def repack(source: Path | str, out: Path | str, files: Iterable[tuple[str, bytes]]) -> tuple[int, int]:
+    new = {name.replace("/", "\\").lower(): (name.replace("/", "\\"), data) for name, data in files}
+    with Archive(source) as archive:
+        stored, replaced = [], 0
+        for entry in archive:
+            name, data = new.pop(entry.path.lower(), (None, None))
+            replaced += name is not None
+            stored.append((entry.path, *_stored(data)) if name else (entry.path, archive.raw(entry), entry.unpacked_size))
+        stored += [(name, *_stored(data)) for name, data in new.values()]
+        _write(out, stored, aligned=archive.header.align_32k == 0)
+    return replaced, len(new)
+
+
+def _write(path: Path | str, stored: list[tuple[str, bytes, int]], aligned: bool) -> int:
+    stored = [(name.replace("/", "\\"), blob, size) for name, blob, size in stored]
     seen: set[str] = set()
-    for name, _ in files:
+    for name, _, _ in stored:
         if name.lower() in seen:
             raise ArchiveError(f"{name}: in the archive twice")
         seen.add(name.lower())
-    table = b"".join(name.encode("latin-1") + b"\0" for name, _ in files)
-    blobs = [(zlib.compress(data, 9), len(data)) if data else (data, 0) for _, data in files]
-    data_start = _aligned(HEADER_SIZE_V5 + len(table) + 4 + DIR_ENTRY_SIZE * len(files))
+    step = _aligned if aligned else (lambda n: n)
+    table = b"".join(name.encode("latin-1") + b"\0" for name, _, _ in stored)
+    data_start = step(HEADER_SIZE_V5 + len(table) + 4 + DIR_ENTRY_SIZE * len(stored))
     offsets, offset = [], 0
-    for stored, _ in blobs:
+    for _, blob, _ in stored:
         offsets.append(offset)
-        offset = _aligned(offset + len(stored))
+        offset = step(offset + len(blob))
     with Path(path).open("wb") as out:
-        out.write(struct.pack("<IIIBBII", 5, 1, 4, 0, 1, data_start, len(table)))
-        out.write(table + struct.pack("<I", len(files)))
-        out.write(b"".join(struct.pack("<III", o, len(stored), size) for o, (stored, size) in zip(offsets, blobs)))
-        for o, (stored, _) in zip(offsets, blobs):
+        out.write(struct.pack("<IIIBBII", 5, 1, 4, 0 if aligned else 1, 1, data_start, len(table)))
+        out.write(table + struct.pack("<I", len(stored)))
+        out.write(b"".join(struct.pack("<III", o, len(blob), size) for o, (_, blob, size) in zip(offsets, stored)))
+        for o, (_, blob, _) in zip(offsets, stored):
             out.seek(data_start + o)
-            out.write(stored)
-    return len(files)
+            out.write(blob)
+    return len(stored)
 
 
 def check_invariants(archive: Archive) -> list[str]:

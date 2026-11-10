@@ -5,7 +5,7 @@ from pathlib import Path
 from . import Dv2Error, archive, locate, unpack
 
 
-USAGE = "python -m dv2lib unpack <out> [<game folder>]\n       python -m dv2lib pack <folder> <out.dv2>"
+USAGE = "python -m dv2lib unpack <out> [<game folder>]\n       python -m dv2lib pack <folder> <out.dv2>\n       python -m dv2lib repack <archive.dv2> <folder> <out.dv2>"
 
 
 def pack(folder: Path, out: Path) -> int:
@@ -19,9 +19,22 @@ def pack(folder: Path, out: Path) -> int:
     return 0
 
 
+def repack(source: Path, folder: Path, out: Path) -> int:
+    files = sorted(p for p in folder.rglob("*") if p.is_file())
+    try:
+        replaced, added = archive.repack(source, out, ((p.relative_to(folder).as_posix(), p.read_bytes()) for p in files))
+    except Dv2Error as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 1
+    print(f"{replaced} replaced, {added} added, the rest copied from {source.name} -> {out}")
+    return 0
+
+
 def main(argv: list[str]) -> int:
     if argv[:1] == ["pack"] and len(argv) == 3:
         return pack(Path(argv[1]), Path(argv[2]))
+    if argv[:1] == ["repack"] and len(argv) == 4:
+        return repack(Path(argv[1]), Path(argv[2]), Path(argv[3]))
     if argv[:1] != ["unpack"] or len(argv) not in (2, 3):
         print(USAGE)
         return 2
